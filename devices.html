@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>سجل أجهزتي | تطبيقات جوكر</title>
-<link rel="stylesheet" href="joker-base.css">
+<link rel="stylesheet" href="fonts-devices.css"><link rel="stylesheet" href="joker-base-v2.css?v=quality1">
 <style>
 :root{
   --bg:#0D1520; --surface:#13202F; --surface2:#1C2E42;
@@ -71,7 +71,7 @@ body{background:radial-gradient(700px 320px at 85% 0%, rgba(34,211,238,.13), tra
 
   <footer class="jk-footer" id="jk-footer"></footer>
 </div>
-<script src="joker-core.js"></script>
+<script src="joker-core.js?v=quality1"></script>
 <script>
 JK.chrome({title:'سجل أجهزتي', tagline:'ملف كامل لكل جهاز: شراء وضمان وصيانة وأعطال'});
 const S = JK.store('devices:list');
@@ -89,6 +89,7 @@ document.getElementById('f').addEventListener('submit', e => {
 document.getElementById('fe').addEventListener('submit', e => {
   e.preventDefault();
   const d = new FormData(e.target);
+  if (!(d.get('note') || '').trim()){ JK.toast('اكتب تفاصيل الحدث الأول.'); return; }
   try { E.add({dev: current, type: d.get('type'), date: d.get('date'), note: d.get('note').trim(),
          cost: d.get('cost') ? +d.get('cost') : null}); } catch(err){ return; }
   e.target.reset(); e.target.date.value = JK.today(); JK.toast('اتسجل الحدث ✔'); renderDev();
@@ -98,7 +99,9 @@ document.getElementById('fe').date.value = JK.today();
 
 function warrantyState(p){
   if (!p.warranty) return '';
-  const left = Math.round((new Date(p.warranty) - new Date()) / 86400000);
+  const today = new Date();
+  const parts = p.warranty.split('-').map(Number);
+  const left = Math.round((Date.UTC(parts[0], parts[1] - 1, parts[2]) - Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000);
   return left >= 0 ? '<span class="warranty-on">الضمان ساري · فاضل ' + left + ' يوم</span>'
                    : '<span class="warranty-off">الضمان خلص من ' + (-left) + ' يوم</span>';
 }
@@ -144,12 +147,12 @@ document.getElementById('list').addEventListener('click', e => {
 document.getElementById('back').addEventListener('click', showList);
 document.getElementById('tl').addEventListener('click', async e => {
   const b = e.target.closest('[data-evdel]'); if (!b) return;
-  if (await JK.confirmDialog('تمسح الحدث ده من سجل الجهاز؟')){ E.remove(b.dataset.evdel); renderDev(); }
+  if (await JK.confirmDialog('تمسح الحدث ده من سجل الجهاز؟')){ try { E.remove(b.dataset.evdel); } catch(err){ return; } renderDev(); }
 });
 document.getElementById('devInfo').addEventListener('click', async e => {
   const id = e.target.dataset && e.target.dataset.del;
   if (id && await JK.confirmDialog('تحذف الجهاز وكل سجله؟')){
-    E.replaceAll(E.all().filter(x => x.dev !== id)); S.remove(id); showList(); JK.toast('اتحذف');
+    try { E.replaceAll(E.all().filter(x => x.dev !== id)); S.remove(id); } catch(err){ return; } showList(); JK.toast('اتحذف');
   }
 });
 
