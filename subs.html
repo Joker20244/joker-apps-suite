@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>اشتراكاتي | تطبيقات جوكر</title>
+<link rel="stylesheet" href="joker-base.css">
+<style>
+:root{
+  --bg:#190F2B; --surface:#241540; --surface2:#322055;
+  --accent:#A78BFA; --accent2:#EC4899;
+  --font-head:'Rubik',sans-serif; --font-body:'Rubik',sans-serif;
+}
+body{background:radial-gradient(700px 320px at 85% 0%, rgba(167,139,250,.17), transparent 60%), var(--bg)}
+.total{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;text-align:center}
+.total>div{background:var(--surface2);border-radius:16px;padding:.9rem .5rem}
+.total b{display:block;font-size:1.35rem;font-family:'Space Grotesk'}
+.due-soon{color:#FCA5A5;font-weight:700}
+.due-ok{color:#6EE7B7}
+.cyc{font-size:.75rem;background:var(--surface2);border-radius:999px;padding:.1rem .6rem;color:var(--muted)}
+
+</style>
+<link rel="icon" href="crown.svg" type="image/svg+xml">
+<meta name="theme-color" content="#190F2B">
+</head>
+<body>
+<div class="jk-wrap">
+  <header class="jk-header" id="jk-header"></header>
+
+  <section class="jk-card">
+    <div class="total">
+      <div><b id="mTotal">0</b><span class="muted">تكلفة الشهر تقريبًا</span></div>
+      <div><b id="yTotal">0</b><span class="muted">تكلفة السنة تقريبًا</span></div>
+    </div>
+  </section>
+
+  <section class="jk-card">
+    <h2 style="font-size:1.05rem">أضف اشتراك</h2>
+    <form id="f">
+      <label>اسم الاشتراك</label>
+      <input name="name" required placeholder="مثال: نتفلیکس، نت البيت، اشتراك لعبة">
+      <div class="jk-grid" style="grid-template-columns:1fr 1fr">
+        <div><label>التكلفة</label><input name="cost" type="number" step="0.01" min="0" required inputmode="decimal"></div>
+        <div><label>الدورة</label><select name="cycle"><option value="monthly">شهري</option><option value="yearly">سنوي</option><option value="weekly">أسبوعي</option></select></div>
+      </div>
+      <label>تاريخ التجديد الجاي</label>
+      <input name="renew" type="date" required>
+      <button class="jk-btn block" type="submit">إضافة الاشتراك</button>
+    </form>
+  </section>
+
+  <section class="jk-card">
+    <h2 style="font-size:1.05rem">اشتراكاتك <span class="muted" id="count"></span></h2>
+    <div id="list"></div>
+  </section>
+
+  <footer class="jk-footer" id="jk-footer"></footer>
+</div>
+<script src="joker-core.js"></script>
+<script>
+JK.chrome({title:'اشتراكاتي', tagline:'كل اشتراكاتك وتكلفتها في مكان واحد'});
+const S = JK.store('subs:items');
+const form = document.getElementById('f');
+const CYC = {weekly: {ar: 'أسبوعي', perYear: 52}, monthly: {ar: 'شهري', perYear: 12}, yearly: {ar: 'سنوي', perYear: 1}};
+
+form.addEventListener('submit', e => {
+  e.preventDefault();
+  const d = new FormData(form);
+  S.add({name: d.get('name').trim(), cost: +d.get('cost'), cycle: d.get('cycle'), renew: d.get('renew')});
+  form.reset(); JK.toast('اتضاف الاشتراك ✔'); render();
+});
+
+function daysTo(dateStr){
+  const t = new Date(); t.setHours(0,0,0,0);
+  return Math.round((new Date(dateStr) - t) / 86400000);
+}
+// Roll overdue renewals forward to their next future date.
+function roll(p){
+  let r = p.renew, guard = 0;
+  const step = {weekly: 7, monthly: 30.44, yearly: 365.25}[p.cycle];
+  while (daysTo(r) < 0 && guard++ < 200){
+    const d = new Date(r);
+    if (p.cycle === 'weekly') d.setDate(d.getDate() + 7);
+    else if (p.cycle === 'monthly') d.setMonth(d.getMonth() + 1);
+    else d.setFullYear(d.getFullYear() + 1);
+    r = d.toISOString().slice(0,10);
+  }
+  if (r !== p.renew) S.update(p.id, {renew: r});
+  return r;
+}
+
+function render(){
+  const items = S.all();
+  items.forEach(p => p.renew = roll(p));
+  items.sort((a,b) => daysTo(a.renew) - daysTo(b.renew));
+  document.getElementById('count').textContent = items.length ? '(' + items.length + ')' : '';
+  const yearly = items.reduce((s,p) => s + p.cost * CYC[p.cycle].perYear, 0);
+  document.getElementById('mTotal').textContent = Math.round(yearly / 12).toLocaleString('ar-EG');
+  document.getElementById('yTotal').textContent = Math.round(yearly).toLocaleString('ar-EG');
+
+  const el = document.getElementById('list');
+  if (!items.length){ el.innerHTML = JK.emptyState('مفيش اشتراكات متسجلة. أضف أول واحد من فوق.'); return; }
+  el.innerHTML = items.map(p => {
+    const dLeft = daysTo(p.renew);
+    const due = dLeft <= 5 ? '<span class="due-soon">يتجدد بعد ' + dLeft + ' يوم!</span>'
+              : '<span class="due-ok">فاضل ' + dLeft + ' يوم</span>';
+    return '<div class="jk-list-item"><div style="flex:1;min-width:0"><b>' + JK.esc(p.name) + '</b> <span class="cyc">' + CYC[p.cycle].ar + '</span><br>' +
+      '<span class="muted">' + JK.fmtMoney(p.cost, 'جنيه') + ' · ' + JK.fmtDate(p.renew) + ' · ' + due + '</span></div>' +
+      '<button class="icon-btn" data-paid="' + p.id + '" title="اتجدد/اتدفع">✔</button>' +
+      '<button class="icon-btn danger" data-del="' + p.id + '">🗑</button></div>';
+  }).join('');
+  JK.wrapLatin(el);
+}
+
+document.getElementById('list').addEventListener('click', async e => {
+  const d = e.target.dataset || {};
+  if (d.paid){ const p = S.get(d.paid); const r = new Date(p.renew);
+    if (p.cycle === 'weekly') r.setDate(r.getDate() + 7);
+    else if (p.cycle === 'monthly') r.setMonth(r.getMonth() + 1);
+    else r.setFullYear(r.getFullYear() + 1);
+    S.update(d.paid, {renew: r.toISOString().slice(0,10)}); JK.toast('اتسجل التجديد ✔'); render(); }
+  else if (d.del && await JK.confirmDialog('تحذف الاشتراك ده؟')){ S.remove(d.del); render(); }
+});
+
+render();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+
+</script>
+</body>
+</html>
