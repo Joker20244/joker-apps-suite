@@ -19,6 +19,7 @@ body{background:radial-gradient(700px 320px at 85% 0%, rgba(129,140,248,.16), tr
 #photoPrev{width:100%;max-height:180px;object-fit:cover;border-radius:14px;margin-top:.6rem;display:none}
 
 </style>
+
 <link rel="icon" href="crown.svg" type="image/svg+xml">
 <meta name="theme-color" content="#12122B">
 </head>
@@ -46,11 +47,11 @@ body{background:radial-gradient(700px 320px at 85% 0%, rgba(129,140,248,.16), tr
   </section>
 
   <section class="jk-card">
-    <div class="jk-row between">
+    <div class="jk-row between" style="flex-wrap:wrap">
       <h2 style="font-size:1.05rem">مقتنياتك <span class="muted" id="count"></span></h2>
-      <div class="jk-row">
-        <input id="q" placeholder="ابحث بأي حاجة…" style="width:140px;padding:.45rem .7rem">
-        <button class="jk-btn ghost" id="export" style="padding:.45rem .8rem">تصدير</button>
+      <div class="jk-row" style="flex:1;min-width:0">
+        <input id="q" placeholder="ابحث بأي حاجة…" style="flex:1;min-width:0;width:140px;padding:.45rem .7rem">
+        <button class="jk-btn ghost" id="export" style="padding:.45rem .8rem;flex:none">تصدير</button>
       </div>
     </div>
     <div id="list"></div>
@@ -83,11 +84,12 @@ document.getElementById('photo').addEventListener('change', e => {
 form.addEventListener('submit', e => {
   e.preventDefault();
   const d = new FormData(form);
+  if (!(d.get('name') || '').trim()){ JK.toast('اكتب اسم واضح للعنصر الأول'); return; }
   try {
     S.add({name: d.get('name').trim(), price: d.get('price') ? +d.get('price') : null,
            bought: d.get('bought') || null, serial: (d.get('serial') || '').trim(),
            notes: (d.get('notes') || '').trim(), photo: photoData});
-  } catch(err){ JK.toast('الصورة كبيرة على التخزين، احفظ من غيرها'); return; }
+  } catch(err){ /* رسالة التخزين الدقيقة بتظهر من النواة */ return; }
   form.reset(); photoData = null; document.getElementById('photoPrev').style.display = 'none';
   JK.toast('اتحفظ الغرض ✔'); render();
 });
