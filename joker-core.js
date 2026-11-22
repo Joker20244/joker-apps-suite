@@ -4,12 +4,26 @@ window.JK = (() => {
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
   const fmtDate = iso => { try { return new Date(iso).toLocaleDateString('ar-EG', {year:'numeric', month:'long', day:'numeric'}); } catch(e){ return iso; } };
-  const fmtMoney = (n, cur) => (n == null || n === '' ? '' : Number(n).toLocaleString('ar-EG', {maximumFractionDigits: 2}) + (cur ? ' ' + cur : ''));
+  const fmtMoney = (n, cur) => (n == null || n === '' ? '' : Number(n).toLocaleString('ar-EG', {maximumFractionDigits: 2}) + (cur ? ' ' + esc(cur) : ''));
 
   function store(ns){
     const key = 'jk:' + ns;
-    const read = () => { try { return JSON.parse(localStorage.getItem(key)) || []; } catch(e){ return []; } };
+    let blocked = false, warned = false;
+    const read = () => {
+      try {
+        const raw = localStorage.getItem(key);
+        const rows = raw == null ? [] : JSON.parse(raw);
+        if (!Array.isArray(rows) || rows.some(x => !x || typeof x !== 'object' || Array.isArray(x))) throw new Error('invalid saved data');
+        blocked = false; return rows;
+      } catch(e){
+        blocked = true;
+        if (!warned){ warned = true; toast('مش قادرين نقرأ البيانات المحفوظة. ما اتمسحتش، والحفظ متوقف لحمايتها. ما تمسحش بيانات المتصفح.'); }
+        return [];
+      }
+    };
     const write = v => {
+      read();
+      if (blocked){ toast('الحفظ متوقف عشان نحافظ على البيانات اللي مش قادرين نقراها. ما تمسحش بيانات المتصفح.'); throw new Error('saved data unreadable'); }
       try { localStorage.setItem(key, JSON.stringify(v)); }
       catch(err){
         toast('مساحة التخزين على جهازك خلصت، التعديل ده ما اتحفظش. امسح عناصر أو صور قديمة من تطبيقات المجموعة وجرب تاني.');
@@ -90,5 +104,74 @@ window.JK = (() => {
     });
   }
 
-  return {esc, uid, today, fmtDate, fmtMoney, store, toast, download, toCSV, wrapLatin, chrome, emptyState, confirmDialog};
+
+  // Shared image input state. A new failed/unfinished choice must never save an older image.
+  function photoPicker({input, preview}){
+    const field = document.getElementById(input), imgPrev = document.getElementById(preview);
+    const submit = field.closest('form').querySelector('[type="submit"]');
+    const label = submit.textContent;
+    let data = null, state = 'empty', generation = 0;
+    const status = document.createElement('p');
+    status.className = 'muted'; status.style.fontSize = '.85rem';
+    status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
+    const remove = document.createElement('button');
+    remove.type = 'button'; remove.className = 'jk-btn ghost';
+    remove.textContent = 'إزالة الصورة'; remove.style.display = 'none';
+    imgPrev.after(status, remove);
+    function setState(next, message){
+      state = next; status.textContent = message || '';
+      submit.disabled = next === 'loading';
+      submit.textContent = next === 'loading' ? 'جاري تجهيز الصورة…' : label;
+      remove.style.display = next === 'empty' ? 'none' : '';
+    }
+    function clear(){
+      generation++; data = null; field.value = '';
+      imgPrev.removeAttribute('src'); imgPrev.style.display = 'none';
+      setState('empty', '');
+    }
+    remove.addEventListener('click', clear);
+    field.addEventListener('change', () => {
+      const file = field.files && field.files[0];
+      const token = ++generation; data = null;
+      imgPrev.removeAttribute('src'); imgPrev.style.display = 'none';
+      if (!file){ clear(); return; }
+      if ((file.type && !file.type.startsWith('image/')) || file.size > 20 * 1024 * 1024){
+        setState('error', 'اختار صورة صالحة حجمها أقل من 20 ميجا، أو اضغط إزالة الصورة.'); return;
+      }
+      setState('loading', 'بنجهّز الصورة قبل الحفظ.');
+      const image = new Image(), url = URL.createObjectURL(file);
+      image.onerror = () => {
+        URL.revokeObjectURL(url); if (token !== generation) return;
+        setState('error', 'الصورة دي ما اتقرتش. اختار صورة تانية أو اضغط إزالة الصورة قبل الحفظ.');
+      };
+      image.onload = () => {
+        URL.revokeObjectURL(url); if (token !== generation) return;
+        try {
+          if (!image.naturalWidth || !image.naturalHeight) throw new Error('empty image');
+          const scale = Math.min(1, 800 / Math.max(image.naturalWidth, image.naturalHeight));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+          canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+          const ctx = canvas.getContext('2d'); if (!ctx) throw new Error('no canvas');
+          ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+          data = canvas.toDataURL('image/jpeg', .72);
+          if (!data.startsWith('data:image/jpeg')) throw new Error('image conversion');
+          imgPrev.src = data; imgPrev.style.display = 'block'; setState('ready', 'الصورة جاهزة للحفظ.');
+        } catch(e){ data = null; setState('error', 'تعذّر تجهيز الصورة. اختار غيرها أو اضغط إزالة الصورة.'); }
+      };
+      image.src = url;
+    });
+    return {
+      value(){
+        if (state === 'loading' || state === 'error'){
+          toast(state === 'loading' ? 'استنى تجهيز الصورة الأول.' : 'الصورة ما اتجهزتش. اختار غيرها أو شيلها الأول.');
+          throw new Error('image is not ready');
+        }
+        return data;
+      },
+      reset: clear
+    };
+  }
+
+  return {esc, uid, today, fmtDate, fmtMoney, store, toast, download, toCSV, wrapLatin, chrome, emptyState, confirmDialog, photoPicker};
 })();
