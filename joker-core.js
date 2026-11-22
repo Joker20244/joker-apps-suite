@@ -2,14 +2,21 @@
 window.JK = (() => {
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-  const today = () => new Date().toISOString().slice(0, 10);
+  const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
   const fmtDate = iso => { try { return new Date(iso).toLocaleDateString('ar-EG', {year:'numeric', month:'long', day:'numeric'}); } catch(e){ return iso; } };
   const fmtMoney = (n, cur) => (n == null || n === '' ? '' : Number(n).toLocaleString('ar-EG', {maximumFractionDigits: 2}) + (cur ? ' ' + cur : ''));
 
   function store(ns){
     const key = 'jk:' + ns;
     const read = () => { try { return JSON.parse(localStorage.getItem(key)) || []; } catch(e){ return []; } };
-    const write = v => { localStorage.setItem(key, JSON.stringify(v)); return v; };
+    const write = v => {
+      try { localStorage.setItem(key, JSON.stringify(v)); }
+      catch(err){
+        toast('مساحة التخزين على جهازك خلصت، التعديل ده ما اتحفظش. امسح عناصر أو صور قديمة من تطبيقات المجموعة وجرب تاني.');
+        throw err;
+      }
+      return v;
+    };
     return {
       all: read,
       get: id => read().find(x => x.id === id),
