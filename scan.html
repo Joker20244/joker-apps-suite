@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ماسح جوكر | تطبيقات جوكر</title>
+<link rel="stylesheet" href="joker-base.css">
+<style>
+:root{
+  --bg:#0A1B1A; --surface:#102826; --surface2:#173836;
+  --accent:#2DD4BF; --accent2:#F97316;
+  --font-head:'Changa',sans-serif; --font-body:'Changa',sans-serif;
+}
+body{background:radial-gradient(700px 320px at 85% 0%, rgba(45,212,191,.14), transparent 60%), var(--bg)}
+#camWrap{position:relative;border-radius:16px;overflow:hidden;background:#000;display:none}
+#cam{width:100%;display:block;max-height:280px;object-fit:cover}
+#scanline{position:absolute;inset-inline:12%;top:50%;height:3px;background:var(--accent2);box-shadow:0 0 12px var(--accent2);animation:mv 1.6s ease-in-out infinite alternate}
+@keyframes mv{from{transform:translateY(-60px)}to{transform:translateY(60px)}}
+.stars{display:flex;flex-direction:row-reverse;justify-content:flex-end;gap:.15rem;font-size:1.4rem}
+.stars button{background:none;color:var(--surface2)}
+.stars button.on{color:#FBBF24}
+.prod-img{width:74px;height:74px;object-fit:contain;border-radius:12px;background:#fff;flex:none}
+.privacy{font-size:.78rem;color:var(--muted);background:var(--surface2);border-radius:12px;padding:.55rem .8rem}
+
+</style>
+<link rel="icon" href="crown.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0A1B1A">
+</head>
+<body>
+<div class="jk-wrap">
+  <header class="jk-header" id="jk-header"></header>
+
+  <section class="jk-card">
+    <h2 style="font-size:1.05rem">امسح منتج</h2>
+    <div id="camWrap"><video id="cam" playsinline muted></video><div id="scanline"></div></div>
+    <div class="jk-row" style="margin-top:.7rem">
+      <button class="jk-btn" id="startCam" style="flex:1">📷 تشغيل الكاميرا</button>
+      <button class="jk-btn ghost" id="stopCam" style="display:none">إيقاف</button>
+    </div>
+    <div id="camNote" class="muted" style="margin-top:.4rem"></div>
+    <label style="margin-top:.8rem">أو اكتب الباركود يدوي</label>
+    <div class="jk-row">
+      <input id="manual" inputmode="numeric" placeholder="مثال: 6224001234567">
+      <button class="jk-btn" id="lookup" style="flex:none">بحث</button>
+    </div>
+    <div class="privacy" style="margin-top:.8rem">خصوصيتك: رقم الباركود بس هو اللي بيتبعت لقاعدة بيانات Open Food Facts المجانية عشان يجيب بيانات المنتج. صورك وتقييماتك وملاحظاتك بتفضل على جهازك. مش كل المنتجات موجودة في القاعدة، خصوصًا المنتجات المحلية، وساعتها تقدر تسجّل المنتج بنفسك.</div>
+  </section>
+
+  <section class="jk-card" id="result" style="display:none"></section>
+
+  <section class="jk-card">
+    <div class="jk-row between">
+      <h2 style="font-size:1.05rem">منتجاتك المحفوظة <span class="muted" id="count"></span></h2>
+      <input id="q" placeholder="ابحث…" style="width:120px;padding:.45rem .7rem">
+    </div>
+    <div id="list"></div>
+  </section>
+
+  <footer class="jk-footer" id="jk-footer"></footer>
+</div>
+<script src="joker-core.js"></script>
+<script>
+JK.chrome({title:'ماسح جوكر', tagline:'امسح الباركود واعرف منتجك واحفظه'});
+const S = JK.store('scan:products');
+let stream = null, detector = null, scanning = false;
+
+const camNote = document.getElementById('camNote');
+if (!('BarcodeDetector' in window)) camNote.textContent = 'المتصفح ده مش بيدعم المسح التلقائي للباركود (متاح في كروم على أندرويد). استخدم الكتابة اليدوية تحت.';
+
+document.getElementById('startCam').addEventListener('click', async () => {
+  if (!('BarcodeDetector' in window)){ JK.toast('المسح غير مدعوم في المتصفح ده'); return; }
+  try {
+    detector = detector || new BarcodeDetector({formats: ['ean_13','ean_8','upc_a','upc_e','code_128','qr_code']});
+    stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment'}});
+    const v = document.getElementById('cam');
+    v.srcObject = stream; await v.play();
+    document.getElementById('camWrap').style.display = 'block';
+    document.getElementById('stopCam').style.display = '';
+    scanning = true; tick();
+  } catch(err){ camNote.textContent = 'مقدرتش أفتح الكاميرا: ' + (err.name === 'NotAllowedError' ? 'الإذن مرفوض، فعّله من إعدادات المتصفح.' : err.message); }
+});
+
+document.getElementById('stopCam').addEventListener('click', stopCam);
+function stopCam(){
+  scanning = false;
+  if (stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
+  document.getElementById('camWrap').style.display = 'none';
+  document.getElementById('stopCam').style.display = 'none';
+}
+
+async function tick(){
+  if (!scanning) return;
+  const v = document.getElementById('cam');
+  try {
+    const codes = await detector.detect(v);
+    if (codes.length){ stopCam(); lookup(codes[0].rawValue); return; }
+  } catch(e){}
+  setTimeout(() => requestAnimationFrame(tick), 350);
+}
+
+document.getElementById('lookup').addEventListener('click', () => {
+  const code = document.getElementById('manual').value.trim();
+  if (code) lookup(code);
+});
+
+async function lookup(code){
+  const box = document.getElementById('result');
+  box.style.display = '';
+  box.innerHTML = '<div class="muted">بندور على المنتج… <span class="en">' + JK.esc(code) + '</span></div>';
+  let prod = null;
+  try {
+    const r = await fetch('https://world.openfoodfacts.org/api/v2/product/' + encodeURIComponent(code) + '.json?fields=product_name,brands,quantity,image_small_url,nutriscore_grade,categories');
+    const j = await r.json();
+    if (j.status === 1) prod = j.product;
+  } catch(e){}
+  if (prod && prod.product_name){
+    box.innerHTML =
+      '<div class="jk-row">' + (prod.image_small_url ? '<img class="prod-img" src="' + prod.image_small_url + '" alt="">' : '') +
+      '<div style="flex:1;min-width:0"><b>' + JK.esc(prod.product_name) + '</b><br><span class="muted">' +
+      [prod.brands, prod.quantity, prod.nutriscore_grade ? 'Nutri-Score: ' + prod.nutriscore_grade.toUpperCase() : '', prod.categories].filter(Boolean).map(JK.esc).join(' · ') +
+      '</span></div></div>' +
+      saveForm(code, prod.product_name, prod.image_small_url || '');
+  } else {
+    box.innerHTML = '<div class="muted" style="margin-bottom:.6rem">المنتج ده مش موجود في قاعدة البيانات المجانية. سجّله بنفسك:</div>' + saveForm(code, '', '');
+  }
+  wireSave(box);
+}
+
+function saveForm(code, name, img){
+  return '<label>الاسم</label><input id="sv_name" value="' + JK.esc(name) + '" required>' +
+    '<label>تقييمك</label><div class="stars" id="stars">' + [1,2,3,4,5].map(i => '<button type="button" data-star="' + i + '">★</button>').join('') + '</div>' +
+    '<label>ملاحظاتك (اختياري)</label><input id="sv_notes" placeholder="رأيك في المنتج">' +
+    '<input type="hidden" id="sv_img" value="' + JK.esc(img) + '">' +
+    '<button class="jk-btn block" id="sv_btn" data-code="' + JK.esc(code) + '">حفظ المنتج</button>';
+}
+
+function wireSave(box){
+  let rating = 0;
+  box.querySelectorAll('#stars button').forEach(b => b.addEventListener('click', () => {
+    rating = +b.dataset.star;
+    box.querySelectorAll('#stars button').forEach(x => x.classList.toggle('on', +x.dataset.star <= rating));
+  }));
+  box.querySelector('#sv_btn').addEventListener('click', () => {
+    const name = box.querySelector('#sv_name').value.trim();
+    if (!name){ JK.toast('اكتب اسم المنتج'); return; }
+    S.add({code: box.querySelector('#sv_btn').dataset.code, name, rating,
+           notes: box.querySelector('#sv_notes').value.trim(), img: box.querySelector('#sv_img').value});
+    JK.toast('اتحفظ المنتج ✔'); box.style.display = 'none'; render();
+  });
+}
+
+const starStr = r => r ? '★'.repeat(r) + '☆'.repeat(5 - r) : 'من غير تقييم';
+let q = '';
+document.getElementById('q').addEventListener('input', e => { q = e.target.value.trim(); render(); });
+
+function render(){
+  const items = S.all().filter(p => !q || (p.name + ' ' + (p.notes || '')).includes(q));
+  document.getElementById('count').textContent = items.length ? '(' + items.length + ')' : '';
+  const el = document.getElementById('list');
+  if (!items.length){ el.innerHTML = JK.emptyState(q ? 'مفيش نتايج' : 'لسه مفيش منتجات محفوظة. امسح أول باركود.'); return; }
+  el.innerHTML = items.map(p =>
+    '<div class="jk-list-item">' +
+      (p.img ? '<img class="prod-img" src="' + JK.esc(p.img) + '" alt="" style="width:48px;height:48px">' : '') +
+      '<div style="flex:1;min-width:0"><b>' + JK.esc(p.name) + '</b><br>' +
+      '<span style="color:#FBBF24;font-size:.85rem">' + starStr(p.rating) + '</span> ' +
+      '<span class="muted en">' + JK.esc(p.code) + '</span>' +
+      (p.notes ? '<br><span class="muted">' + JK.esc(p.notes) + '</span>' : '') + '</div>' +
+      '<button class="icon-btn danger" data-del="' + p.id + '">🗑</button></div>').join('');
+  JK.wrapLatin(el);
+}
+
+document.getElementById('list').addEventListener('click', async e => {
+  const id = e.target.dataset && e.target.dataset.del;
+  if (id && await JK.confirmDialog('تحذف المنتج ده؟')){ S.remove(id); render(); }
+});
+
+render();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+
+</script>
+</body>
+</html>
