@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>حرارة موبايلك | تطبيقات جوكر</title>
-<link rel="stylesheet" href="joker-base.css">
+<link rel="stylesheet" href="fonts-ui.css"><link rel="stylesheet" href="joker-base-v2.css?v=quality1">
 <style>
 :root{
   --bg:#1F0D0D; --surface:#2E1414; --surface2:#401C1C;
@@ -64,7 +64,7 @@ body{background:radial-gradient(700px 320px at 85% 0%, rgba(248,113,113,.15), tr
 
   <footer class="jk-footer" id="jk-footer"></footer>
 </div>
-<script src="joker-core.js"></script>
+<script src="joker-core.js?v=quality1"></script>
 <script>
 JK.chrome({title:'حرارة موبايلك', tagline:'افهم السخونية وقلّلها'});
 const S = JK.store('heat:log');
@@ -118,7 +118,7 @@ document.getElementById('logBtn').addEventListener('click', () => {
 
 document.getElementById('log').addEventListener('click', async e => {
   const del = e.target.closest('[data-del]');
-  if (del){ S.remove(del.dataset.del); render(); return; }
+  if (del){ try { S.remove(del.dataset.del); } catch(err){ return; } render(); return; }
   if (e.target.closest('#clearLog') && await JK.confirmDialog('تمسح كل الملاحظات المسجلة؟')){ try { S.replaceAll([]); } catch(err){} render(); return; }
   if (e.target.closest('#expLog')){
     const rows = [['الحالة','التاريخ','الموقف']].concat(S.all().map(x => [x.level, x.at, x.sit || '']));
