@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>أسعاري | تطبيقات جوكر</title>
+<link rel="stylesheet" href="joker-base.css">
+<style>
+:root{
+  --bg:#0C1A12; --surface:#12261B; --surface2:#1A3526;
+  --accent:#22C55E; --accent2:#EAB308;
+  --font-head:'Cairo',sans-serif; --font-body:'Tajawal',sans-serif;
+}
+body{background:radial-gradient(700px 300px at 80% -5%, rgba(34,197,94,.16), transparent 60%), var(--bg)}
+.trend-up{color:#F87171;font-weight:700}
+.trend-down{color:#34D399;font-weight:700}
+.trend-same{color:var(--muted)}
+.price-big{font-family:'Space Grotesk';font-weight:700;font-size:1.15rem}
+.hist{display:flex;gap:.4rem;overflow-x:auto;padding-block:.4rem}
+.hist .jk-chip{white-space:nowrap}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:.6rem;text-align:center}
+.stats b{display:block;font-size:1.2rem;font-family:'Space Grotesk'}
+
+</style>
+<link rel="icon" href="crown.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0C1A12">
+</head>
+<body>
+<div class="jk-wrap">
+  <header class="jk-header" id="jk-header"></header>
+
+  <section class="jk-card">
+    <h2 style="font-size:1.05rem">سجّل عملية شراء</h2>
+    <form id="f">
+      <label>اسم المنتج</label>
+      <input name="name" required placeholder="مثال: أرز 5 كيلو">
+      <div class="jk-grid" style="grid-template-columns:1fr 1fr">
+        <div><label>السعر</label><input name="price" type="number" step="0.01" min="0" required inputmode="decimal" placeholder="0.00"></div>
+        <div><label>العملة</label><input name="currency" value="جنيه" maxlength="10"></div>
+      </div>
+      <div class="jk-grid" style="grid-template-columns:1fr 1fr">
+        <div><label>التاريخ</label><input name="date" type="date"></div>
+        <div><label>المكان (اختياري)</label><input name="place" placeholder="اسم المحل"></div>
+      </div>
+      <button class="jk-btn block" type="submit">حفظ السعر</button>
+    </form>
+  </section>
+
+  <section class="jk-card">
+    <div class="jk-row between">
+      <h2 style="font-size:1.05rem">منتجاتك</h2>
+      <div class="jk-row">
+        <input id="q" placeholder="ابحث…" style="width:130px;padding:.45rem .7rem">
+        <button class="jk-btn ghost" id="export" style="padding:.45rem .8rem">تصدير</button>
+      </div>
+    </div>
+    <div id="list"></div>
+  </section>
+
+  <footer class="jk-footer" id="jk-footer"></footer>
+</div>
+<script src="joker-core.js"></script>
+<script>
+JK.chrome({title:'أسعاري', tagline:'سجّل الأسعار وقارن التغيّر'});
+const S = JK.store('prices:purchases');
+const form = document.getElementById('f');
+form.date.value = JK.today();
+
+form.addEventListener('submit', e => {
+  e.preventDefault();
+  const d = new FormData(form);
+  S.add({name: d.get('name').trim(), price: +d.get('price'), currency: d.get('currency').trim() || 'جنيه',
+         date: d.get('date') || JK.today(), place: (d.get('place') || '').trim()});
+  form.reset(); form.date.value = JK.today(); form.currency.value = 'جنيه';
+  JK.toast('اتسجل السعر ✔'); render();
+});
+
+function groupByName(items){
+  const m = {};
+  items.forEach(p => { const k = p.name.trim(); (m[k] = m[k] || []).push(p); });
+  Object.values(m).forEach(v => v.sort((a,b) => b.date.localeCompare(a.date)));
+  return Object.entries(m).sort((a,b) => b[1][0].date.localeCompare(a[1][0].date));
+}
+
+function trend(arr){
+  if (arr.length < 2) return '<span class="trend-same">أول تسجيل</span>';
+  const diff = arr[0].price - arr[1].price;
+  const pct = arr[1].price ? Math.round(diff / arr[1].price * 100) : 0;
+  if (diff > 0) return '<span class="trend-up">▲ زاد ' + JK.fmtMoney(diff, arr[0].currency) + ' (' + pct + '%)</span>';
+  if (diff < 0) return '<span class="trend-down">▼ قلّ ' + JK.fmtMoney(-diff, arr[0].currency) + ' (' + (-pct) + '%)</span>';
+  return '<span class="trend-same">نفس السعر</span>';
+}
+
+let q = '';
+document.getElementById('q').addEventListener('input', e => { q = e.target.value.trim(); render(); });
+
+function render(){
+  const items = S.all().filter(p => !q || p.name.includes(q) || (p.place||'').includes(q));
+  const el = document.getElementById('list');
+  if (!items.length){ el.innerHTML = JK.emptyState(q ? 'مفيش نتايج للبحث ده' : 'لسه مفيش أسعار متسجلة. سجّل أول عملية شراء من فوق.'); return; }
+  el.innerHTML = groupByName(items).map(([name, arr]) => {
+    const last = arr[0];
+    return '<div class="jk-card" style="margin:.6rem 0;background:var(--surface2)">' +
+      '<div class="jk-row between"><b>' + JK.esc(name) + '</b>' + trend(arr) + '</div>' +
+      '<div class="jk-row between" style="margin-top:.3rem">' +
+        '<span class="price-big">' + JK.fmtMoney(last.price, last.currency) + '</span>' +
+        '<span class="muted">' + JK.fmtDate(last.date) + (last.place ? ' · ' + JK.esc(last.place) : '') + '</span></div>' +
+      (arr.length > 1 ? '<div class="hist">' + arr.slice(1, 8).map(p =>
+        '<span class="jk-chip">' + JK.fmtMoney(p.price, p.currency) + ' · ' + p.date + '</span>').join('') + '</div>' : '') +
+      '<div class="jk-row" style="justify-content:flex-end;margin-top:.3rem">' +
+        '<button class="icon-btn danger" data-del="' + last.id + '" title="حذف آخر تسجيل">🗑</button></div>' +
+      '</div>';
+  }).join('');
+}
+
+document.getElementById('list').addEventListener('click', async e => {
+  const id = e.target.dataset && e.target.dataset.del;
+  if (id && await JK.confirmDialog('تحذف التسجيل ده؟')){ S.remove(id); render(); JK.toast('اتحذف'); }
+});
+
+document.getElementById('export').addEventListener('click', () => {
+  const rows = [['المنتج','السعر','العملة','التاريخ','المكان']].concat(
+    S.all().map(p => [p.name, p.price, p.currency, p.date, p.place || '']));
+  JK.download('as3ari-' + JK.today() + '.csv', '﻿' + JK.toCSV(rows), 'text/csv');
+  JK.toast('اتصدّر ملف CSV');
+});
+
+render();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+
+</script>
+</body>
+</html>
