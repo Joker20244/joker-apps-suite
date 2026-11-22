@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>اشتراكاتي | تطبيقات جوكر</title>
-<link rel="stylesheet" href="joker-base.css">
+<link rel="stylesheet" href="fonts-subs.css"><link rel="stylesheet" href="joker-base-v2.css?v=quality1">
 <style>
 :root{
   --bg:#190F2B; --surface:#241540; --surface2:#322055;
@@ -64,7 +64,7 @@ body{background:radial-gradient(700px 320px at 85% 0%, rgba(167,139,250,.17), tr
 
   <footer class="jk-footer" id="jk-footer"></footer>
 </div>
-<script src="joker-core.js"></script>
+<script src="joker-core.js?v=quality1"></script>
 <script>
 JK.chrome({title:'اشتراكاتي', tagline:'كل اشتراكاتك وتكلفتها في مكان واحد'});
 const S = JK.store('subs:items');
@@ -80,8 +80,8 @@ form.addEventListener('submit', e => {
 });
 
 function daysTo(dateStr){
-  const t = new Date(); t.setHours(0,0,0,0);
-  return Math.round((new Date(dateStr) - t) / 86400000);
+  const t = new Date(), parts = dateStr.split('-').map(Number);
+  return Math.round((Date.UTC(parts[0], parts[1] - 1, parts[2]) - Date.UTC(t.getFullYear(), t.getMonth(), t.getDate())) / 86400000);
 }
 // Advance a date by one cycle, clamping to the target month's last day (Jan 31 + 1 month = Feb 28/29, not Mar 3).
 function addCycle(dateStr, cycle){
@@ -179,7 +179,7 @@ document.getElementById('list').addEventListener('click', async e => {
   if (d.paid){ const p = S.get(d.paid);
     try { S.update(d.paid, {renew: advanceAfterPayment(p)}); } catch(err){ return; } JK.toast('اتسجل الدفع واتحدد الموعد الجاي ✔'); render(); if (dueTimer) checkDue(); }
   else if (d.cal){ const p = S.get(d.cal); if (p){ JK.download('تجديد-' + p.name.replace(/\s+/g,'-') + '.ics', icsFor(p), 'text/calendar'); JK.toast('اتنزّل ملف التقويم — افتحه عشان يتضاف، والتذكير على حسب إعدادات تقويمك'); } }
-  else if (d.del && await JK.confirmDialog('تحذف الاشتراك ده؟')){ S.remove(d.del); render(); }
+  else if (d.del && await JK.confirmDialog('تحذف الاشتراك ده؟')){ try { S.remove(d.del); } catch(err){ return; } render(); }
 });
 
 render();
