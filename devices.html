@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>سجل أجهزتي | تطبيقات جوكر</title>
+<link rel="stylesheet" href="joker-base.css">
+<style>
+:root{
+  --bg:#0D1520; --surface:#13202F; --surface2:#1C2E42;
+  --accent:#22D3EE; --accent2:#38BDF8;
+  --font-head:'IBM Plex Sans Arabic',sans-serif; --font-body:'IBM Plex Sans Arabic',sans-serif;
+}
+body{background:radial-gradient(700px 320px at 85% 0%, rgba(34,211,238,.13), transparent 60%), var(--bg)}
+.warranty-on{color:#6EE7B7}
+.warranty-off{color:#FCA5A5}
+.tl{border-inline-start:2px solid var(--surface2);margin:.5rem .4rem;padding-inline-start:.9rem}
+.tl-item{position:relative;padding:.35rem 0}
+.tl-item::before{content:'';position:absolute;inset-inline-start:-1.05rem;top:.75rem;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.tl-item .d{color:var(--muted);font-size:.78rem}
+.ev-type{font-size:.72rem;border-radius:999px;padding:.05rem .55rem;background:var(--surface2);color:var(--accent)}
+.back{background:none;color:var(--muted);font-size:.9rem;padding:.3rem .6rem}
+
+</style>
+<link rel="icon" href="crown.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0D1520">
+</head>
+<body>
+<div class="jk-wrap">
+  <header class="jk-header" id="jk-header"></header>
+
+  <div id="viewList">
+    <section class="jk-card">
+      <h2 style="font-size:1.05rem">أضف جهاز</h2>
+      <form id="f">
+        <label>اسم الجهاز</label>
+        <input name="name" required placeholder="مثال: تلاجة توشيبا، موبايل ريدمي">
+        <div class="jk-grid" style="grid-template-columns:1fr 1fr">
+          <div><label>تاريخ الشراء</label><input name="bought" type="date"></div>
+          <div><label>نهاية الضمان</label><input name="warranty" type="date"></div>
+        </div>
+        <button class="jk-btn block" type="submit">إضافة الجهاز</button>
+      </form>
+    </section>
+    <section class="jk-card">
+      <h2 style="font-size:1.05rem">أجهزتك <span class="muted" id="count"></span></h2>
+      <div id="list"></div>
+    </section>
+  </div>
+
+  <div id="viewDev" style="display:none">
+    <button class="back" id="back">→ رجوع لكل الأجهزة</button>
+    <section class="jk-card" id="devInfo"></section>
+    <section class="jk-card">
+      <h2 style="font-size:1.05rem">سجّل حدث</h2>
+      <form id="fe">
+        <div class="jk-grid" style="grid-template-columns:1fr 1fr">
+          <div><label>النوع</label><select name="type"><option value="صيانة">صيانة</option><option value="عطل">عطل</option><option value="قطعة غيار">تغيير قطعة غيار</option><option value="ملاحظة">ملاحظة</option></select></div>
+          <div><label>التاريخ</label><input name="date" type="date" required></div>
+        </div>
+        <label>التفاصيل</label>
+        <input name="note" required placeholder="مثال: تغيير موتور، عطل في الشاشة">
+        <label>التكلفة (اختياري)</label>
+        <input name="cost" type="number" step="0.01" min="0" inputmode="decimal">
+        <button class="jk-btn block" type="submit">إضافة للسجل</button>
+      </form>
+    </section>
+    <section class="jk-card"><h2 style="font-size:1.05rem">تاريخ الجهاز</h2><div class="tl" id="tl"></div></section>
+  </div>
+
+  <footer class="jk-footer" id="jk-footer"></footer>
+</div>
+<script src="joker-core.js"></script>
+<script>
+JK.chrome({title:'سجل أجهزتي', tagline:'ملف كامل لكل جهاز: شراء وضمان وصيانة وأعطال'});
+const S = JK.store('devices:list');
+const E = JK.store('devices:events');
+let current = null;
+
+document.getElementById('f').addEventListener('submit', e => {
+  e.preventDefault();
+  const d = new FormData(e.target);
+  S.add({name: d.get('name').trim(), bought: d.get('bought') || null, warranty: d.get('warranty') || null});
+  e.target.reset(); JK.toast('اتضاف الجهاز ✔'); render();
+});
+
+document.getElementById('fe').addEventListener('submit', e => {
+  e.preventDefault();
+  const d = new FormData(e.target);
+  E.add({dev: current, type: d.get('type'), date: d.get('date'), note: d.get('note').trim(),
+         cost: d.get('cost') ? +d.get('cost') : null});
+  e.target.reset(); e.target.date.value = JK.today(); JK.toast('اتسجل الحدث ✔'); renderDev();
+});
+
+document.getElementById('fe').date.value = JK.today();
+
+function warrantyState(p){
+  if (!p.warranty) return '';
+  const left = Math.round((new Date(p.warranty) - new Date()) / 86400000);
+  return left >= 0 ? '<span class="warranty-on">الضمان ساري · فاضل ' + left + ' يوم</span>'
+                   : '<span class="warranty-off">الضمان خلص من ' + (-left) + ' يوم</span>';
+}
+
+function render(){
+  const items = S.all();
+  document.getElementById('count').textContent = items.length ? '(' + items.length + ')' : '';
+  const el = document.getElementById('list');
+  if (!items.length){ el.innerHTML = JK.emptyState('لسه مفيش أجهزة. أضف أول جهاز من فوق.'); return; }
+  el.innerHTML = items.map(p => {
+    const evs = E.all().filter(x => x.dev === p.id).length;
+    return '<div class="jk-list-item" style="cursor:pointer" data-open="' + p.id + '">' +
+      '<div style="flex:1;min-width:0"><b>' + JK.esc(p.name) + '</b><br>' +
+      '<span class="muted">' + (p.bought ? 'اشتراه: ' + JK.fmtDate(p.bought) + ' · ' : '') + warrantyState(p) +
+      ' · ' + evs + ' حدث</span></div><span style="color:var(--muted)">‹</span></div>';
+  }).join('');
+}
+
+function renderDev(){
+  const p = S.get(current); if (!p) return showList();
+  document.getElementById('devInfo').innerHTML =
+    '<div class="jk-row between"><h2 style="font-size:1.1rem">' + JK.esc(p.name) + '</h2>' +
+    '<button class="icon-btn danger" data-del="' + p.id + '">🗑</button></div>' +
+    '<div class="muted">' + (p.bought ? 'تاريخ الشراء: ' + JK.fmtDate(p.bought) + '<br>' : '') +
+    (p.warranty ? 'نهاية الضمان: ' + JK.fmtDate(p.warranty) + ' · ' + warrantyState(p) : '') + '</div>';
+  const evs = E.all().filter(x => x.dev === current).sort((a,b) => b.date.localeCompare(a.date));
+  document.getElementById('tl').innerHTML = evs.length ? evs.map(x =>
+    '<div class="tl-item"><span class="ev-type">' + JK.esc(x.type) + '</span> ' + JK.esc(x.note) +
+    (x.cost != null ? ' · ' + JK.fmtMoney(x.cost, 'جنيه') : '') +
+    '<div class="d">' + JK.fmtDate(x.date) + '</div></div>').join('')
+    : '<div class="muted">مفيش أحداث لسه.</div>';
+  JK.wrapLatin(document.getElementById('viewDev'));
+}
+
+function showList(){ current = null; document.getElementById('viewDev').style.display = 'none'; document.getElementById('viewList').style.display = ''; render(); }
+function showDev(id){ current = id; document.getElementById('viewList').style.display = 'none'; document.getElementById('viewDev').style.display = ''; renderDev(); }
+
+document.getElementById('list').addEventListener('click', e => {
+  const row = e.target.closest('[data-open]');
+  if (row) showDev(row.dataset.open);
+});
+document.getElementById('back').addEventListener('click', showList);
+document.getElementById('devInfo').addEventListener('click', async e => {
+  const id = e.target.dataset && e.target.dataset.del;
+  if (id && await JK.confirmDialog('تحذف الجهاز وكل سجله؟')){
+    E.replaceAll(E.all().filter(x => x.dev !== id)); S.remove(id); showList(); JK.toast('اتحذف');
+  }
+});
+
+render();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+
+</script>
+</body>
+</html>
