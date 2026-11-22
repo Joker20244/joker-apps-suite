@@ -12,7 +12,8 @@
   --font-head:'Cairo',sans-serif; --font-body:'Tajawal',sans-serif;
 }
 body{background:radial-gradient(700px 320px at 85% 0%, rgba(52,211,153,.13), transparent 60%), var(--bg)}
-.spec{display:flex;justify-content:space-between;gap:.8rem;padding:.55rem 0;border-bottom:1px solid rgba(255,255,255,.06)}
+.spec{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);align-items:start;gap:.8rem;padding:.55rem 0;border-bottom:1px solid rgba(255,255,255,.06)}
+.spec .k,.spec .v{min-width:0;overflow-wrap:anywhere}
 .spec:last-child{border:none}
 .spec .k{color:var(--muted);font-size:.88rem;flex:none}
 .spec .v{text-align:end;font-weight:600}
