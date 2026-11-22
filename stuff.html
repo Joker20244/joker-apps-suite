@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>مقتنياتي | تطبيقات جوكر</title>
-<link rel="stylesheet" href="joker-base.css">
+<link rel="stylesheet" href="fonts-stuff.css"><link rel="stylesheet" href="joker-base-v2.css?v=quality1">
 <style>
 :root{
   --bg:#12122B; --surface:#1B1B3D; --surface2:#262650;
@@ -59,38 +59,24 @@ body{background:radial-gradient(700px 320px at 85% 0%, rgba(129,140,248,.16), tr
 
   <footer class="jk-footer" id="jk-footer"></footer>
 </div>
-<script src="joker-core.js"></script>
+<script src="joker-core.js?v=quality1"></script>
 <script>
 JK.chrome({title:'مقتنياتي', tagline:'كل ممتلكاتك في مكان واحد'});
 const S = JK.store('stuff:items');
 const form = document.getElementById('f');
-let photoData = null;
-
-document.getElementById('photo').addEventListener('change', e => {
-  const file = e.target.files[0]; if (!file) return;
-  const img = new Image();
-  img.onload = () => {
-    const scale = Math.min(1, 800 / Math.max(img.width, img.height));
-    const c = document.createElement('canvas');
-    c.width = img.width * scale; c.height = img.height * scale;
-    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-    photoData = c.toDataURL('image/jpeg', .72);
-    const p = document.getElementById('photoPrev'); p.src = photoData; p.style.display = 'block';
-    URL.revokeObjectURL(img.src);
-  };
-  img.src = URL.createObjectURL(file);
-});
+const photoPicker = JK.photoPicker({input: 'photo', preview: 'photoPrev'});
 
 form.addEventListener('submit', e => {
   e.preventDefault();
   const d = new FormData(form);
   if (!(d.get('name') || '').trim()){ JK.toast('اكتب اسم واضح للعنصر الأول'); return; }
   try {
+    const photoData = photoPicker.value();
     S.add({name: d.get('name').trim(), price: d.get('price') ? +d.get('price') : null,
            bought: d.get('bought') || null, serial: (d.get('serial') || '').trim(),
            notes: (d.get('notes') || '').trim(), photo: photoData});
   } catch(err){ /* رسالة التخزين الدقيقة بتظهر من النواة */ return; }
-  form.reset(); photoData = null; document.getElementById('photoPrev').style.display = 'none';
+  form.reset(); photoPicker.reset();
   JK.toast('اتحفظ الغرض ✔'); render();
 });
 
@@ -119,7 +105,7 @@ function render(){
 
 document.getElementById('list').addEventListener('click', async e => {
   const id = e.target.dataset && e.target.dataset.del;
-  if (id && await JK.confirmDialog('تحذف الغرض ده نهائيًا؟')){ S.remove(id); render(); JK.toast('اتحذف'); }
+  if (id && await JK.confirmDialog('تحذف الغرض ده نهائيًا؟')){ try { S.remove(id); } catch(err){ return; } render(); JK.toast('اتحذف'); }
 });
 
 document.getElementById('export').addEventListener('click', () => {
