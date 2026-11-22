@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ماسح جوكر | تطبيقات جوكر</title>
-<link rel="stylesheet" href="joker-base.css">
+<link rel="stylesheet" href="fonts-scan.css"><link rel="stylesheet" href="joker-base-v2.css?v=quality1">
 <style>
 :root{
   --bg:#0A1B1A; --surface:#102826; --surface2:#173836;
@@ -59,70 +59,102 @@ body{background:radial-gradient(700px 320px at 85% 0%, rgba(45,212,191,.14), tra
 
   <footer class="jk-footer" id="jk-footer"></footer>
 </div>
-<script src="joker-core.js"></script>
+<script src="joker-core.js?v=quality1"></script>
 <script>
 JK.chrome({title:'ماسح جوكر', tagline:'امسح الباركود واعرف منتجك واحفظه'});
 const S = JK.store('scan:products');
-let stream = null, detector = null, scanning = false;
-
+let stream = null, detector = null, scanning = false, cameraGeneration = 0;
+let lookupGeneration = 0, lookupController = null;
 const camNote = document.getElementById('camNote');
-if (!('BarcodeDetector' in window)) camNote.textContent = 'المتصفح ده مش بيدعم المسح التلقائي للباركود (متاح في كروم على أندرويد). استخدم الكتابة اليدوية تحت.';
+const startButton = document.getElementById('startCam');
+if (!('BarcodeDetector' in window)) camNote.textContent = 'المتصفح ده مش بيدعم المسح التلقائي للباركود. استخدم الكتابة اليدوية تحت.';
 
-document.getElementById('startCam').addEventListener('click', async () => {
-  if (!('BarcodeDetector' in window)){ JK.toast('المسح غير مدعوم في المتصفح ده'); return; }
+function safeImageUrl(raw){
+  try { const url = new URL(String(raw)); return url.protocol === 'https:' ? url.href : ''; }
+  catch(e){ return ''; }
+}
+startButton.addEventListener('click', async () => {
+  if (startButton.disabled) return;
+  if (!('BarcodeDetector' in window)){ JK.toast('المسح غير مدعوم في المتصفح ده. تقدر تكتب الباركود.'); return; }
+  const token = ++cameraGeneration; startButton.disabled = true;
   try {
-    detector = detector || new BarcodeDetector({formats: ['ean_13','ean_8','upc_a','upc_e','code_128','qr_code']});
-    stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment'}});
-    const v = document.getElementById('cam');
-    v.srcObject = stream; await v.play();
+    const wanted = ['ean_13','ean_8','upc_a','upc_e','code_128','qr_code'];
+    const supported = BarcodeDetector.getSupportedFormats ? await BarcodeDetector.getSupportedFormats() : wanted;
+    const formats = wanted.filter(x => supported.includes(x));
+    if (!formats.length) throw new Error('المتصفح مش بيدعم صيغ الباركود المطلوبة. استخدم الكتابة اليدوية.');
+    if (token !== cameraGeneration || document.hidden) return;
+    detector = new BarcodeDetector({formats});
+    const opened = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment'}});
+    if (token !== cameraGeneration || document.hidden){ opened.getTracks().forEach(t => t.stop()); return; }
+    stream = opened;
+    const video = document.getElementById('cam'); video.srcObject = stream;
+    await video.play();
+    if (token !== cameraGeneration || document.hidden){ stopCam(); return; }
     document.getElementById('camWrap').style.display = 'block';
     document.getElementById('stopCam').style.display = '';
+    camNote.textContent = 'وجّه الكاميرا للباركود. الكاميرا بتقف لو خرجت من الصفحة.';
     scanning = true; tick();
-  } catch(err){ camNote.textContent = 'مقدرتش أفتح الكاميرا: ' + (err.name === 'NotAllowedError' ? 'الإذن مرفوض، فعّله من إعدادات المتصفح.' : err.message); }
+  } catch(err){
+    if (token === cameraGeneration){ stopCam(); camNote.textContent = 'مقدرناش نفتح المسح: ' + (err.name === 'NotAllowedError' ? 'إذن الكاميرا مرفوض. تقدر تستخدم الكتابة اليدوية.' : err.message); }
+  } finally { if (token === cameraGeneration && !scanning) startButton.disabled = false; }
 });
-
 document.getElementById('stopCam').addEventListener('click', stopCam);
 function stopCam(){
-  scanning = false;
+  cameraGeneration++; scanning = false;
   if (stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
+  const video = document.getElementById('cam'); video.pause(); video.srcObject = null;
   document.getElementById('camWrap').style.display = 'none';
-  document.getElementById('stopCam').style.display = 'none';
+  document.getElementById('stopCam').style.display = 'none'; startButton.disabled = false;
 }
-
+window.addEventListener('pagehide', stopCam);
+document.addEventListener('visibilitychange', () => { if (document.hidden) stopCam(); });
 async function tick(){
   if (!scanning) return;
-  const v = document.getElementById('cam');
   try {
-    const codes = await detector.detect(v);
-    if (codes.length){ stopCam(); lookup(codes[0].rawValue); return; }
+    const codes = await detector.detect(document.getElementById('cam'));
+    if (!scanning) return;
+    if (codes.length){ const code = codes[0].rawValue; stopCam(); lookup(code); return; }
   } catch(e){}
-  setTimeout(() => requestAnimationFrame(tick), 350);
+  if (scanning) setTimeout(() => requestAnimationFrame(tick), 350);
 }
+function manualLookup(){ const code = document.getElementById('manual').value.trim(); if (code) lookup(code); else JK.toast('اكتب رقم الباركود الأول.'); }
+document.getElementById('lookup').addEventListener('click', manualLookup);
+document.getElementById('manual').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); manualLookup(); } });
 
-document.getElementById('lookup').addEventListener('click', () => {
-  const code = document.getElementById('manual').value.trim();
-  if (code) lookup(code);
-});
-
-async function lookup(code){
-  const box = document.getElementById('result');
-  box.style.display = '';
-  box.innerHTML = '<div class="muted">بندور على المنتج… <span class="en">' + JK.esc(code) + '</span></div>';
-  let prod = null;
+async function lookup(rawCode){
+  const code = String(rawCode).trim();
+  if (!code || code.length > 128){ JK.toast('الباركود غير مناسب للبحث. اكتب رقم المنتج أو سجّله يدويًا.'); return; }
+  stopCam();
+  const token = ++lookupGeneration;
+  if (lookupController) lookupController.abort();
+  const controller = new AbortController(); lookupController = controller;
+  const timer = setTimeout(() => controller.abort(), 12000);
+  const box = document.getElementById('result'), button = document.getElementById('lookup');
+  button.disabled = true; box.style.display = '';
+  box.innerHTML = '<div class="muted" role="status">بندور على المنتج… <span class="en">' + JK.esc(code) + '</span></div>';
+  let prod = null, status = 'error';
   try {
-    const r = await fetch('https://world.openfoodfacts.org/api/v2/product/' + encodeURIComponent(code) + '.json?fields=product_name,brands,quantity,image_small_url,nutriscore_grade,categories');
-    const j = await r.json();
-    if (j.status === 1) prod = j.product;
-  } catch(e){}
-  if (prod && prod.product_name){
-    box.innerHTML =
-      '<div class="jk-row">' + (prod.image_small_url ? '<img class="prod-img" src="' + prod.image_small_url + '" alt="">' : '') +
+    const response = await fetch('https://world.openfoodfacts.org/api/v2/product/' + encodeURIComponent(code) + '.json?fields=product_name,brands,quantity,image_small_url,nutriscore_grade,categories', {signal: controller.signal});
+    if (!response.ok) throw new Error('provider unavailable');
+    const data = await response.json();
+    if (data.status === 1 && data.product && data.product.product_name){ prod = data.product; status = 'found'; }
+    else if (data.status === 0) status = 'not-found';
+    else status = 'incomplete';
+  } catch(e){ status = controller.signal.aborted ? 'timeout' : 'error'; }
+  finally { clearTimeout(timer); if (token === lookupGeneration){ lookupController = null; button.disabled = false; } }
+  if (token !== lookupGeneration) return;
+  if (status === 'found'){
+    const image = safeImageUrl(prod.image_small_url);
+    box.innerHTML = '<div class="jk-row">' + (image ? '<img class="prod-img" src="' + JK.esc(image) + '" alt="صورة المنتج">' : '') +
       '<div style="flex:1;min-width:0"><b>' + JK.esc(prod.product_name) + '</b><br><span class="muted">' +
-      [prod.brands, prod.quantity, prod.nutriscore_grade ? 'Nutri-Score: ' + prod.nutriscore_grade.toUpperCase() : '', prod.categories].filter(Boolean).map(JK.esc).join(' · ') +
-      '</span></div></div>' +
-      saveForm(code, prod.product_name, prod.image_small_url || '');
+      [prod.brands, prod.quantity, prod.nutriscore_grade ? 'Nutri-Score: ' + String(prod.nutriscore_grade).toUpperCase() : '', prod.categories].filter(Boolean).map(JK.esc).join(' · ') +
+      '</span></div></div>' + saveForm(code, prod.product_name, image);
   } else {
-    box.innerHTML = '<div class="muted" style="margin-bottom:.6rem">المنتج ده مش موجود في قاعدة البيانات المجانية. سجّله بنفسك:</div>' + saveForm(code, '', '');
+    const message = status === 'not-found' ? 'المنتج ده مش متسجل في قاعدة البيانات حاليًا. تقدر تسجّله بنفسك:' :
+      status === 'timeout' ? 'البحث أخد وقت طويل فوقفناه. ده مش معناه إن المنتج مش متسجل. جرّب تاني أو سجّله بنفسك:' :
+      status === 'incomplete' ? 'بيانات المنتج اللي رجعت مش كاملة. تقدر تكمل اسمه وتحفظه بنفسك:' :
+      'مقدرناش نوصل لبيانات المنتج. لسه ما اتأكدناش إذا كان متسجل. جرّب تاني أو سجّله بنفسك:';
+    box.innerHTML = '<div class="muted" role="status" style="margin-bottom:.6rem">' + message + '</div>' + saveForm(code, '', '');
   }
   wireSave(box);
 }
@@ -155,13 +187,13 @@ let q = '';
 document.getElementById('q').addEventListener('input', e => { q = e.target.value.trim(); render(); });
 
 function render(){
-  const items = S.all().filter(p => !q || (p.name + ' ' + (p.notes || '')).includes(q));
+  const items = S.all().filter(p => !q || (p.name + ' ' + p.code + ' ' + (p.notes || '')).includes(q));
   document.getElementById('count').textContent = items.length ? '(' + items.length + ')' : '';
   const el = document.getElementById('list');
   if (!items.length){ el.innerHTML = JK.emptyState(q ? 'مفيش نتايج' : 'لسه مفيش منتجات محفوظة. امسح أول باركود.'); return; }
   el.innerHTML = items.map(p =>
     '<div class="jk-list-item">' +
-      (p.img ? '<img class="prod-img" src="' + JK.esc(p.img) + '" alt="" style="width:48px;height:48px">' : '') +
+      (safeImageUrl(p.img) ? '<img class="prod-img" src="' + JK.esc(safeImageUrl(p.img)) + '" alt="" style="width:48px;height:48px">' : '') +
       '<div style="flex:1;min-width:0"><b>' + JK.esc(p.name) + '</b><br>' +
       '<span style="color:#FBBF24;font-size:.85rem">' + starStr(p.rating) + '</span> ' +
       '<span class="muted en">' + JK.esc(p.code) + '</span>' +
@@ -172,7 +204,7 @@ function render(){
 
 document.getElementById('list').addEventListener('click', async e => {
   const id = e.target.dataset && e.target.dataset.del;
-  if (id && await JK.confirmDialog('تحذف المنتج ده؟')){ S.remove(id); render(); }
+  if (id && await JK.confirmDialog('تحذف المنتج ده؟')){ try { S.remove(id); } catch(err){ return; } render(); }
 });
 
 render();
