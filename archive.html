@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>أرشيفي | تطبيقات جوكر</title>
+<link rel="stylesheet" href="joker-base.css">
+<style>
+:root{
+  --bg:#1C130A; --surface:#2A1D11; --surface2:#3A2A1A;
+  --accent:#FBBF24; --accent2:#F59E0B;
+  --font-head:'Vazirmatn',sans-serif; --font-body:'Vazirmatn',sans-serif;
+}
+body{background:radial-gradient(700px 320px at 85% 0%, rgba(251,191,36,.12), transparent 60%), var(--bg)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}
+.a-card{background:var(--surface2);border-radius:16px;overflow:hidden}
+.a-card img{width:100%;height:120px;object-fit:cover;display:block}
+.a-card .pad{padding:.6rem .7rem}
+.a-card b{display:block;font-size:.95rem}
+.a-card .cat{font-size:.7rem;background:var(--surface);border-radius:999px;padding:.05rem .5rem;color:var(--accent)}
+.a-card p{color:var(--muted);font-size:.8rem;margin-top:.2rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.photo-btn{display:inline-flex;align-items:center;gap:.4rem;background:var(--surface2);border-radius:12px;padding:.6rem .9rem;color:var(--muted);font-size:.9rem;cursor:pointer}
+#photoPrev{width:100%;max-height:180px;object-fit:cover;border-radius:14px;margin-top:.6rem;display:none}
+
+</style>
+<link rel="icon" href="crown.svg" type="image/svg+xml">
+<meta name="theme-color" content="#1C130A">
+</head>
+<body>
+<div class="jk-wrap">
+  <header class="jk-header" id="jk-header"></header>
+
+  <section class="jk-card">
+    <h2 style="font-size:1.05rem">أضف للأرشيف</h2>
+    <form id="f">
+      <label>اسم العنصر</label>
+      <input name="name" required placeholder="مثال: ضمان الغسالة، عقد الشقة، دواء الضغط">
+      <label>التصنيف</label>
+      <input name="cat" list="cats" placeholder="مستندات / أدوية / إلكترونيات / حاجات قديمة…">
+      <datalist id="cats"></datalist>
+      <label>الوصف والملاحظات</label>
+      <textarea name="desc" rows="2" placeholder="أي معلومات مهمة عنه"></textarea>
+      <label class="photo-btn">📷 صوّر أو ارفع صورة <input id="photo" type="file" accept="image/*" capture="environment" hidden></label>
+      <img id="photoPrev" alt="">
+      <button class="jk-btn block" type="submit">حفظ في الأرشيف</button>
+    </form>
+  </section>
+
+  <section class="jk-card">
+    <div class="jk-row between">
+      <h2 style="font-size:1.05rem">الأرشيف <span class="muted" id="count"></span></h2>
+      <input id="q" placeholder="ابحث…" style="width:130px;padding:.45rem .7rem">
+    </div>
+    <div id="catChips" style="margin:.3rem 0 .5rem"></div>
+    <div class="grid" id="list"></div>
+  </section>
+
+  <footer class="jk-footer" id="jk-footer"></footer>
+</div>
+<script src="joker-core.js"></script>
+<script>
+JK.chrome({title:'أرشيفي', tagline:'صوّر، صنّف، وخزّن أي حاجة تلاقيها بسهولة'});
+const S = JK.store('archive:items');
+const form = document.getElementById('f');
+let photoData = null;
+
+document.getElementById('photo').addEventListener('change', e => {
+  const file = e.target.files[0]; if (!file) return;
+  const img = new Image();
+  img.onload = () => {
+    const scale = Math.min(1, 800 / Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = img.width * scale; c.height = img.height * scale;
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    photoData = c.toDataURL('image/jpeg', .72);
+    const p = document.getElementById('photoPrev'); p.src = photoData; p.style.display = 'block';
+    URL.revokeObjectURL(img.src);
+  };
+  img.src = URL.createObjectURL(file);
+});
+
+form.addEventListener('submit', e => {
+  e.preventDefault();
+  const d = new FormData(form);
+  try {
+    S.add({name: d.get('name').trim(), cat: (d.get('cat') || '').trim() || 'عام',
+           desc: (d.get('desc') || '').trim(), photo: photoData});
+  } catch(err){ JK.toast('الصورة كبيرة على التخزين، احفظ من غيرها'); return; }
+  form.reset(); photoData = null; document.getElementById('photoPrev').style.display = 'none';
+  JK.toast('اتحفظ في الأرشيف ✔'); render();
+});
+
+let q = '', catFilter = '';
+document.getElementById('q').addEventListener('input', e => { q = e.target.value.trim(); render(); });
+
+function render(){
+  const all = S.all();
+  const cats = [...new Set(all.map(p => p.cat))];
+  document.getElementById('cats').innerHTML = cats.map(c => '<option value="' + JK.esc(c) + '">').join('');
+  document.getElementById('catChips').innerHTML =
+    '<span class="jk-chip" data-cat="" style="cursor:pointer;' + (catFilter === '' ? 'border:1px solid var(--accent)' : '') + '">الكل</span>' +
+    cats.map(c => '<span class="jk-chip" data-cat="' + JK.esc(c) + '" style="cursor:pointer;' + (catFilter === c ? 'border:1px solid var(--accent)' : '') + '">' + JK.esc(c) + '</span>').join('');
+
+  const items = all.filter(p =>
+    (!catFilter || p.cat === catFilter) &&
+    (!q || (p.name + ' ' + p.desc + ' ' + p.cat).includes(q)));
+  document.getElementById('count').textContent = items.length ? '(' + items.length + ')' : '';
+  const el = document.getElementById('list');
+  if (!items.length){ el.innerHTML = JK.emptyState(q || catFilter ? 'مفيش نتايج للفلتر ده' : 'الأرشيف فاضي. ابدأ بأول عنصر.'); el.style.gridColumn = '1/-1'; return; }
+  el.innerHTML = items.map(p =>
+    '<div class="a-card">' +
+      (p.photo ? '<img src="' + p.photo + '" alt="">' : '') +
+      '<div class="pad"><div class="jk-row between"><b>' + JK.esc(p.name) + '</b>' +
+      '<button class="icon-btn danger" data-del="' + p.id + '" style="width:28px;height:28px;font-size:.8rem">🗑</button></div>' +
+      '<span class="cat">' + JK.esc(p.cat) + '</span>' +
+      (p.desc ? '<p>' + JK.esc(p.desc) + '</p>' : '') + '</div>' +
+    '</div>').join('');
+  JK.wrapLatin(el);
+}
+
+document.getElementById('catChips').addEventListener('click', e => {
+  const c = e.target.dataset && e.target.dataset.cat;
+  if (c !== undefined){ catFilter = c; render(); }
+});
+document.getElementById('list').addEventListener('click', async e => {
+  const id = e.target.dataset && e.target.dataset.del;
+  if (id && await JK.confirmDialog('تحذف العنصر ده من الأرشيف؟')){ S.remove(id); render(); JK.toast('اتحذف'); }
+});
+
+render();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+
+</script>
+</body>
+      </html>
