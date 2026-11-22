@@ -9,7 +9,7 @@
 :root{
   --bg:#1F0D0D; --surface:#2E1414; --surface2:#401C1C;
   --accent:#F87171; --accent2:#FB923C;
-  --font-head:'Reem Kufi',sans-serif; --font-body:'Tajawal',sans-serif;
+  --font-head:'Cairo',sans-serif; --font-body:'Tajawal',sans-serif;
 }
 body{background:radial-gradient(700px 320px at 85% 0%, rgba(248,113,113,.15), transparent 60%), var(--bg)}
 .thermo{display:flex;gap:.5rem}
@@ -20,7 +20,10 @@ body{background:radial-gradient(700px 320px at 85% 0%, rgba(248,113,113,.15), tr
 .note-card{background:linear-gradient(135deg, rgba(251,146,60,.14), transparent);border:1px solid rgba(251,146,60,.3);border-radius:14px;padding:.7rem .9rem;font-size:.85rem}
 #battBox b{font-family:'Space Grotesk'}
 
+.thermo .dot{display:inline-block;width:1.4rem;height:1.4rem;border-radius:50%;margin-bottom:.15rem}
+
 </style>
+
 <link rel="icon" href="crown.svg" type="image/svg+xml">
 <meta name="theme-color" content="#1F0D0D">
 </head>
@@ -28,7 +31,7 @@ body{background:radial-gradient(700px 320px at 85% 0%, rgba(248,113,113,.15), tr
 <div class="jk-wrap">
   <header class="jk-header" id="jk-header"></header>
 
-  <div class="note-card">بصراحة: المتصفح مش بيقدر يقرا حرارة الموبايل ولا البطارية، مفيش متصفح بيسمح بكده. اللي تحت هنا إرشادات وفهم للسخونية + تسجيل يدوي لملاحظاتك. نسخة الـAPK اللي جاية هتقرا حرارة البطارية الحقيقية على طول.</div>
+  <div class="note-card">بصراحة: مفيش متصفح بيقدر يقرا <b>حرارة</b> الموبايل، دي مش متاحة للمتصفحات خالص. لكن <b>مستوى البطارية وحالة الشحن</b> بعض المتصفحات بتعرضهم (هتلاقيهم تحت لو متاحين عندك). الباقي هنا إرشادات وفهم للسخونية + تسجيل يدوي لملاحظاتك عشان تلاحظ النمط.</div>
 
   <section class="jk-card" id="battBox" style="display:none">
     <h2 style="font-size:1.05rem">اللي المتصفح يقدر يشوفه من البطارية</h2>
@@ -38,10 +41,10 @@ body{background:radial-gradient(700px 320px at 85% 0%, rgba(248,113,113,.15), tr
   <section class="jk-card">
     <h2 style="font-size:1.05rem">سجّل حالة موبايلك دلوقتي</h2>
     <div class="thermo" id="thermo">
-      <button data-l="عادي">🧊<div style="font-size:.75rem">عادي</div></button>
-      <button data-l="دافي">🙂<div style="font-size:.75rem">دافي</div></button>
-      <button data-l="سخن">🥵<div style="font-size:.75rem">سخن</div></button>
-      <button data-l="سخن جدًا">🔥<div style="font-size:.75rem">سخن جدًا</div></button>
+      <button data-l="عادي"><span class="dot" style="background:#38BDF8"></span><div style="font-size:.75rem">عادي</div></button>
+      <button data-l="دافي"><span class="dot" style="background:#FDE047"></span><div style="font-size:.75rem">دافي</div></button>
+      <button data-l="سخن"><span class="dot" style="background:#FB923C"></span><div style="font-size:.75rem">سخن</div></button>
+      <button data-l="سخن جدًا"><span class="dot" style="background:#EF4444"></span><div style="font-size:.75rem">سخن جدًا</div></button>
     </div>
     <label>كان بيحصل إيه ساعتها؟ (اختياري)</label>
     <input id="sit" placeholder="مثال: بلعب لعبة تقيلة / بشحن والموبايل في الشمس">
@@ -107,10 +110,20 @@ document.getElementById('thermo').addEventListener('click', e => {
 
 document.getElementById('logBtn').addEventListener('click', () => {
   if (!level){ JK.toast('اختار حالة الموبايل الأول'); return; }
-  S.add({level, sit: document.getElementById('sit').value.trim(), at: new Date().toISOString()});
+  try { S.add({level, sit: document.getElementById('sit').value.trim(), at: new Date().toISOString()}); } catch(err){ return; }
   document.getElementById('sit').value = ''; level = null;
   document.querySelectorAll('#thermo button').forEach(x => x.classList.remove('sel'));
   JK.toast('اتسجلت الملاحظة ✔'); render();
+});
+
+document.getElementById('log').addEventListener('click', async e => {
+  const del = e.target.closest('[data-del]');
+  if (del){ S.remove(del.dataset.del); render(); return; }
+  if (e.target.closest('#clearLog') && await JK.confirmDialog('تمسح كل الملاحظات المسجلة؟')){ try { S.replaceAll([]); } catch(err){} render(); return; }
+  if (e.target.closest('#expLog')){
+    const rows = [['الحالة','التاريخ','الموقف']].concat(S.all().map(x => [x.level, x.at, x.sit || '']));
+    JK.download('heat-log.csv', '\ufeff' + JK.toCSV(rows), 'text/csv');
+  }
 });
 
 function render(){
@@ -118,10 +131,13 @@ function render(){
   const el = document.getElementById('log');
   if (!items.length){ el.innerHTML = '<div class="muted" style="margin-top:.5rem">سجّل ملاحظاتك عشان تلاحظ نمط السخونة (وقت معين؟ تطبيق معين؟).</div>'; return; }
   const hotCount = items.filter(x => x.level === 'سخن' || x.level === 'سخن جدًا').length;
-  el.innerHTML = '<div class="muted" style="margin:.5rem 0">سجلت ' + items.length + ' مرة، منهم ' + hotCount + ' سخنة واضحة.</div>' +
-    items.slice(0, 10).map(x =>
-      '<div class="cause"><b>' + JK.esc(x.level) + '</b> · ' + JK.fmtDate(x.at) +
-      (x.sit ? '<br><span class="muted">' + JK.esc(x.sit) + '</span>' : '') + '</div>').join('');
+  el.innerHTML = '<div class="jk-row between" style="margin:.5rem 0"><span class="muted">سجلت ' + items.length + ' مرة، منهم ' + hotCount + ' سخنة واضحة.</span>' +
+      '<span><button class="icon-btn" id="expLog" title="تصدير CSV">⬇</button>' +
+      '<button class="icon-btn danger" id="clearLog" title="مسح الكل">🗑</button></span></div>' +
+    items.map(x =>
+      '<div class="cause jk-row between"><span><b>' + JK.esc(x.level) + '</b> · ' + JK.fmtDate(x.at) +
+      (x.sit ? '<br><span class="muted">' + JK.esc(x.sit) + '</span>' : '') + '</span>' +
+      '<button class="icon-btn danger" data-del="' + x.id + '" title="امسح الملاحظة دي">🗑</button></div>').join('');
 }
 
 render();
@@ -129,4 +145,4 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catc
 
 </script>
 </body>
-  </html>
+</html>
