@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>أسعاري | تطبيقات جوكر</title>
-<link rel="stylesheet" href="joker-base.css">
+<link rel="stylesheet" href="fonts-ui.css"><link rel="stylesheet" href="joker-base-v2.css?v=quality1">
 <style>
 :root{
   --bg:#0C1A12; --surface:#12261B; --surface2:#1A3526;
@@ -60,7 +60,7 @@ body{background:radial-gradient(700px 300px at 80% -5%, rgba(34,197,94,.16), tra
 
   <footer class="jk-footer" id="jk-footer"></footer>
 </div>
-<script src="joker-core.js"></script>
+<script src="joker-core.js?v=quality1"></script>
 <script>
 JK.chrome({title:'أسعاري', tagline:'سجّل الأسعار وقارن التغيّر'});
 const S = JK.store('prices:purchases');
@@ -120,7 +120,7 @@ function render(){
 
 document.getElementById('list').addEventListener('click', async e => {
   const id = e.target.dataset && e.target.dataset.del;
-  if (id && await JK.confirmDialog('تحذف التسجيل ده؟')){ S.remove(id); render(); JK.toast('اتحذف'); }
+  if (id && await JK.confirmDialog('تحذف التسجيل ده؟')){ try { S.remove(id); } catch(err){ return; } render(); JK.toast('اتحذف'); }
 });
 
 document.getElementById('export').addEventListener('click', () => {
