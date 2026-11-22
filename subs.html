@@ -20,12 +20,20 @@ body{background:radial-gradient(700px 320px at 85% 0%, rgba(167,139,250,.17), tr
 .cyc{font-size:.75rem;background:var(--surface2);border-radius:999px;padding:.1rem .6rem;color:var(--muted)}
 
 </style>
+
 <link rel="icon" href="crown.svg" type="image/svg+xml">
 <meta name="theme-color" content="#190F2B">
 </head>
 <body>
 <div class="jk-wrap">
   <header class="jk-header" id="jk-header"></header>
+
+  <section class="jk-card" id="remindCard">
+    <h2 style="font-size:1.05rem">التنبيه بمواعيد التجديد</h2>
+    <div class="muted" style="font-size:.8rem;margin-bottom:.4rem">طريقتين من غير سيرفر: تنبيه المتصفح (بيظهر وانت فاتح التطبيق بس)، أو تنزيل ميعاد التجديد الجاي في تقويم موبايلك — بيتضاف بتذكير قبلها بيوم حسب إعدادات التنبيهات في تطبيق التقويم عندك. بيسجّل الميعاد الجاي بس: بعد ما تدفع ويتحدد الميعاد الجديد، نزّله تاني من زرار التقويم جنب كل اشتراك.</div>
+    <button class="jk-btn block" id="notifBtn">فعّل تنبيهات المتصفح</button>
+    <div class="muted" id="notifState" style="font-size:.75rem;margin-top:.3rem"></div>
+  </section>
 
   <section class="jk-card">
     <div class="total">
@@ -66,32 +74,81 @@ const CYC = {weekly: {ar: 'أسبوعي', perYear: 52}, monthly: {ar: 'شهري'
 form.addEventListener('submit', e => {
   e.preventDefault();
   const d = new FormData(form);
-  S.add({name: d.get('name').trim(), cost: +d.get('cost'), cycle: d.get('cycle'), renew: d.get('renew')});
-  form.reset(); JK.toast('اتضاف الاشتراك ✔'); render();
+  if (!(d.get('name') || '').trim()){ JK.toast('اكتب اسم واضح للعنصر الأول'); return; }
+  try { S.add({name: d.get('name').trim(), cost: +d.get('cost'), cycle: d.get('cycle'), renew: d.get('renew')}); } catch(err){ return; }
+  form.reset(); JK.toast('اتضاف الاشتراك ✔'); render(); if (dueTimer) checkDue();
 });
 
 function daysTo(dateStr){
   const t = new Date(); t.setHours(0,0,0,0);
   return Math.round((new Date(dateStr) - t) / 86400000);
 }
-// Roll overdue renewals forward to their next future date.
-function roll(p){
-  let r = p.renew, guard = 0;
-  const step = {weekly: 7, monthly: 30.44, yearly: 365.25}[p.cycle];
-  while (daysTo(r) < 0 && guard++ < 200){
-    const d = new Date(r);
-    if (p.cycle === 'weekly') d.setDate(d.getDate() + 7);
-    else if (p.cycle === 'monthly') d.setMonth(d.getMonth() + 1);
-    else d.setFullYear(d.getFullYear() + 1);
-    r = d.toISOString().slice(0,10);
+// Advance a date by one cycle, clamping to the target month's last day (Jan 31 + 1 month = Feb 28/29, not Mar 3).
+function addCycle(dateStr, cycle){
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDate();
+  if (cycle === 'weekly'){ d.setDate(d.getDate() + 7); }
+  else if (cycle === 'monthly'){
+    d.setMonth(d.getMonth() + 1);
+    if (d.getDate() < day) d.setDate(0); // overflowed into next month -> clamp to last day of target month
   }
-  if (r !== p.renew) S.update(p.id, {renew: r});
+  else { d.setFullYear(d.getFullYear() + 1); if (d.getDate() < day) d.setDate(0); }
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+// On explicit "paid": advance from the recorded due date until the next future due date.
+function advanceAfterPayment(p){
+  let r = p.renew, guard = 0;
+  do { r = addCycle(r, p.cycle); } while (daysTo(r) < 0 && guard++ < 400);
   return r;
+}
+
+// ---- renewal reminders (honest browser limits) ----
+const notified = new Set();
+function checkDue(){
+  S.all().forEach(p => {
+    const d = daysTo(p.renew);
+    if (d <= 3 && !notified.has(p.id + p.renew)){
+      notified.add(p.id + p.renew);
+      try { new Notification('اشتراك ' + p.name, {body: d < 0 ? 'عدى ميعاد التجديد من ' + (-d) + ' يوم' : d === 0 ? 'بيتجدد النهاردة!' : 'بيتجدد بعد ' + d + ' يوم'}); } catch(e){}
+    }
+  });
+}
+function notifStateText(){
+  const el = document.getElementById('notifState');
+  if (!('Notification' in window)){ el.textContent = 'المتصفح ده مش بيدعم التنبيهات. تقدر تنزّل ميعاد كل تجديد في تقويمك من الزرار جنب كل اشتراك.'; return; }
+  if (Notification.permission === 'granted') el.textContent = 'التنبيهات شغالة — بتظهر وانت فاتح التطبيق بس. وكمان تقدر تنزّل ميعاد التجديد في تقويمك من الزرار جنب كل اشتراك (بيضيف تنبيه قبلها بيوم حسب إعدادات تقويمك).';
+  else if (Notification.permission === 'denied') el.textContent = 'التنبيهات متقفولة من إعدادات المتصفح. فعّلها من هناك، أو نزّل ميعاد التجديد في تقويمك من الزرار جنب كل اشتراك.';
+}
+let dueTimer = null;
+function startDueChecks(){
+  checkDue();
+  if (!dueTimer) dueTimer = setInterval(checkDue, 60000);
+}
+document.getElementById('notifBtn').addEventListener('click', async () => {
+  if (!('Notification' in window)){ notifStateText(); return; }
+  const perm = await Notification.requestPermission();
+  notifStateText();
+  if (perm === 'granted'){ startDueChecks(); JK.toast('التنبيهات اتفعلت ✔'); }
+});
+notifStateText();
+if ('Notification' in window && Notification.permission === 'granted') startDueChecks();
+
+function icsFor(p){
+  const dt = p.renew.replace(/-/g, '');
+  const nd = new Date(p.renew + 'T00:00:00'); nd.setDate(nd.getDate() + 1);
+  const dtEnd = nd.getFullYear() + String(nd.getMonth() + 1).padStart(2, '0') + String(nd.getDate()).padStart(2, '0');
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  return ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Joker//Subs//AR','BEGIN:VEVENT',
+    'UID:' + p.id + '@joker-subs','DTSTAMP:' + stamp,
+    'DTSTART;VALUE=DATE:' + dt,'DTEND;VALUE=DATE:' + dtEnd,
+    'SUMMARY:تجديد اشتراك ' + String(p.name).replace(/[\r\n,;]/g, ' '),
+    'DESCRIPTION:تكلفة التجديد: ' + p.cost + ' جنيه',
+    'BEGIN:VALARM','TRIGGER:-P1D','ACTION:DISPLAY','DESCRIPTION:تجديد اشتراك ' + String(p.name).replace(/[\r\n,;]/g, ' '),'END:VALARM',
+    'END:VEVENT','END:VCALENDAR'].join('\r\n');
 }
 
 function render(){
   const items = S.all();
-  items.forEach(p => p.renew = roll(p));
   items.sort((a,b) => daysTo(a.renew) - daysTo(b.renew));
   document.getElementById('count').textContent = items.length ? '(' + items.length + ')' : '';
   const yearly = items.reduce((s,p) => s + p.cost * CYC[p.cycle].perYear, 0);
@@ -102,10 +159,13 @@ function render(){
   if (!items.length){ el.innerHTML = JK.emptyState('مفيش اشتراكات متسجلة. أضف أول واحد من فوق.'); return; }
   el.innerHTML = items.map(p => {
     const dLeft = daysTo(p.renew);
-    const due = dLeft <= 5 ? '<span class="due-soon">يتجدد بعد ' + dLeft + ' يوم!</span>'
+    const due = dLeft < 0 ? '<span class="due-soon">عدى موعده بـ ' + (-dLeft) + ' يوم — دوس ✔ لو اتدفع</span>'
+              : dLeft <= 5 ? '<span class="due-soon">يتجدد بعد ' + dLeft + ' يوم!</span>'
               : '<span class="due-ok">فاضل ' + dLeft + ' يوم</span>';
     return '<div class="jk-list-item"><div style="flex:1;min-width:0"><b>' + JK.esc(p.name) + '</b> <span class="cyc">' + CYC[p.cycle].ar + '</span><br>' +
       '<span class="muted">' + JK.fmtMoney(p.cost, 'جنيه') + ' · ' + JK.fmtDate(p.renew) + ' · ' + due + '</span></div>' +
+      '<button class="icon-btn" data-cal="' + p.id + '" title="نزّل ميعاد التجديد في التقويم">' +
+        '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></button>' +
       '<button class="icon-btn" data-paid="' + p.id + '" title="اتجدد/اتدفع">✔</button>' +
       '<button class="icon-btn danger" data-del="' + p.id + '">🗑</button></div>';
   }).join('');
@@ -113,12 +173,12 @@ function render(){
 }
 
 document.getElementById('list').addEventListener('click', async e => {
-  const d = e.target.dataset || {};
-  if (d.paid){ const p = S.get(d.paid); const r = new Date(p.renew);
-    if (p.cycle === 'weekly') r.setDate(r.getDate() + 7);
-    else if (p.cycle === 'monthly') r.setMonth(r.getMonth() + 1);
-    else r.setFullYear(r.getFullYear() + 1);
-    S.update(d.paid, {renew: r.toISOString().slice(0,10)}); JK.toast('اتسجل التجديد ✔'); render(); }
+  const btn = e.target.closest('button');
+  if (!btn || !e.currentTarget.contains(btn)) return;
+  const d = btn.dataset || {};
+  if (d.paid){ const p = S.get(d.paid);
+    try { S.update(d.paid, {renew: advanceAfterPayment(p)}); } catch(err){ return; } JK.toast('اتسجل الدفع واتحدد الموعد الجاي ✔'); render(); if (dueTimer) checkDue(); }
+  else if (d.cal){ const p = S.get(d.cal); if (p){ JK.download('تجديد-' + p.name.replace(/\s+/g,'-') + '.ics', icsFor(p), 'text/calendar'); JK.toast('اتنزّل ملف التقويم — افتحه عشان يتضاف، والتذكير على حسب إعدادات تقويمك'); } }
   else if (d.del && await JK.confirmDialog('تحذف الاشتراك ده؟')){ S.remove(d.del); render(); }
 });
 
