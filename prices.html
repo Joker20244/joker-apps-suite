@@ -22,6 +22,7 @@ body{background:radial-gradient(700px 300px at 80% -5%, rgba(34,197,94,.16), tra
 .stats b{display:block;font-size:1.2rem;font-family:'Space Grotesk'}
 
 </style>
+
 <link rel="icon" href="crown.svg" type="image/svg+xml">
 <meta name="theme-color" content="#0C1A12">
 </head>
@@ -47,7 +48,7 @@ body{background:radial-gradient(700px 300px at 80% -5%, rgba(34,197,94,.16), tra
   </section>
 
   <section class="jk-card">
-    <div class="jk-row between">
+    <div class="jk-row between" style="flex-wrap:wrap">
       <h2 style="font-size:1.05rem">منتجاتك</h2>
       <div class="jk-row">
         <input id="q" placeholder="ابحث…" style="width:130px;padding:.45rem .7rem">
@@ -69,17 +70,18 @@ form.date.value = JK.today();
 form.addEventListener('submit', e => {
   e.preventDefault();
   const d = new FormData(form);
-  S.add({name: d.get('name').trim(), price: +d.get('price'), currency: d.get('currency').trim() || 'جنيه',
-         date: d.get('date') || JK.today(), place: (d.get('place') || '').trim()});
+  if (!(d.get('name') || '').trim()){ JK.toast('اكتب اسم واضح للعنصر الأول'); return; }
+  try { S.add({name: d.get('name').trim(), price: +d.get('price'), currency: d.get('currency').trim() || 'جنيه',
+         date: d.get('date') || JK.today(), place: (d.get('place') || '').trim()}); } catch(err){ return; }
   form.reset(); form.date.value = JK.today(); form.currency.value = 'جنيه';
   JK.toast('اتسجل السعر ✔'); render();
 });
 
 function groupByName(items){
-  const m = {};
-  items.forEach(p => { const k = p.name.trim(); (m[k] = m[k] || []).push(p); });
-  Object.values(m).forEach(v => v.sort((a,b) => b.date.localeCompare(a.date)));
-  return Object.entries(m).sort((a,b) => b[1][0].date.localeCompare(a[1][0].date));
+  const m = new Map();
+  items.forEach(p => { const k = p.name.trim(); if (!m.has(k)) m.set(k, []); m.get(k).push(p); });
+  m.forEach(v => v.sort((a,b) => b.date.localeCompare(a.date)));
+  return [...m.entries()].sort((a,b) => b[1][0].date.localeCompare(a[1][0].date));
 }
 
 function trend(arr){
@@ -100,11 +102,14 @@ function render(){
   if (!items.length){ el.innerHTML = JK.emptyState(q ? 'مفيش نتايج للبحث ده' : 'لسه مفيش أسعار متسجلة. سجّل أول عملية شراء من فوق.'); return; }
   el.innerHTML = groupByName(items).map(([name, arr]) => {
     const last = arr[0];
+    const sameCur = arr.filter(p => p.currency === last.currency);
+    const otherCurs = [...new Set(arr.filter(p => p.currency !== last.currency).map(p => p.currency))];
     return '<div class="jk-card" style="margin:.6rem 0;background:var(--surface2)">' +
-      '<div class="jk-row between"><b>' + JK.esc(name) + '</b>' + trend(arr) + '</div>' +
+      '<div class="jk-row between"><b>' + JK.esc(name) + '</b>' + trend(sameCur) + '</div>' +
       '<div class="jk-row between" style="margin-top:.3rem">' +
         '<span class="price-big">' + JK.fmtMoney(last.price, last.currency) + '</span>' +
         '<span class="muted">' + JK.fmtDate(last.date) + (last.place ? ' · ' + JK.esc(last.place) : '') + '</span></div>' +
+      (otherCurs.length ? '<div class="muted" style="font-size:.78rem">اتسجل كمان بعملة تانية (' + otherCurs.map(JK.esc).join('، ') + ') — المقارنة بتتم بين تسجيلات نفس العملة بس</div>' : '') +
       (arr.length > 1 ? '<div class="hist">' + arr.slice(1, 8).map(p =>
         '<span class="jk-chip">' + JK.fmtMoney(p.price, p.currency) + ' · ' + p.date + '</span>').join('') + '</div>' : '') +
       '<div class="jk-row" style="justify-content:flex-end;margin-top:.3rem">' +
