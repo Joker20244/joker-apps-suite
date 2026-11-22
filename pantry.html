@@ -21,6 +21,7 @@ body{background:radial-gradient(700px 320px at 85% 0%, rgba(163,230,53,.13), tra
 .shop-item input{width:auto;accent-color:var(--accent)}
 
 </style>
+
 <link rel="icon" href="crown.svg" type="image/svg+xml">
 <meta name="theme-color" content="#151B0E">
 </head>
@@ -69,10 +70,13 @@ const form = document.getElementById('f');
 form.addEventListener('submit', e => {
   e.preventDefault();
   const d = new FormData(form);
+  if (!(d.get('name') || '').trim()){ JK.toast('اكتب اسم واضح للعنصر الأول'); return; }
   const name = d.get('name').trim();
   const existing = S.all().find(p => p.name === name);
-  if (existing){ S.update(existing.id, {qty: existing.qty + (+d.get('qty') || 0)}); JK.toast('زوّدنا كمية «' + name + '»'); }
-  else S.add({name, qty: +d.get('qty') || 0, unit: (d.get('unit') || '').trim(), low: +d.get('low') || 0});
+  try {
+    if (existing){ S.update(existing.id, {qty: existing.qty + (+d.get('qty') || 0)}); JK.toast('زوّدنا كمية «' + name + '»'); }
+    else S.add({name, qty: +d.get('qty') || 0, unit: (d.get('unit') || '').trim(), low: +d.get('low') || 0});
+  } catch(err){ return; }
   form.reset(); form.qty.value = 1; form.low.value = 1; render();
 });
 
@@ -109,14 +113,14 @@ function render(){
 
 document.getElementById('list').addEventListener('click', async e => {
   const d = e.target.dataset || {}; const it = id => S.get(id);
-  if (d.plus){ const p = it(d.plus); S.update(p.id, {qty: p.qty + 1}); render(); }
-  else if (d.minus){ const p = it(d.minus); S.update(p.id, {qty: Math.max(0, p.qty - 1)}); render(); }
-  else if (d.del && await JK.confirmDialog('تحذف الصنف ده؟')){ S.remove(d.del); render(); }
+  if (d.plus){ const p = it(d.plus); try { S.update(p.id, {qty: p.qty + 1}); } catch(err){} render(); }
+  else if (d.minus){ const p = it(d.minus); try { S.update(p.id, {qty: Math.max(0, p.qty - 1)}); } catch(err){} render(); }
+  else if (d.del && await JK.confirmDialog('تحذف الصنف ده؟')){ try { S.remove(d.del); } catch(err){ return; } render(); }
 });
 
 document.getElementById('shop').addEventListener('click', e => {
   const id = e.target.dataset && e.target.dataset.bought;
-  if (id){ const p = S.get(id); S.update(id, {qty: p.low + 2}); JK.toast('تمام، اتحسبت إنك اشتريت «' + p.name + '»'); render(); }
+  if (id){ const p = S.get(id); try { S.update(id, {qty: p.low + 2}); } catch(err){ return; } JK.toast('تمام، اتحسبت إنك اشتريت «' + p.name + '»'); render(); }
 });
 
 document.getElementById('share').addEventListener('click', () => {
