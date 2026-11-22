@@ -22,6 +22,7 @@ body{background:radial-gradient(700px 320px at 85% 0%, rgba(34,211,238,.13), tra
 .back{background:none;color:var(--muted);font-size:.9rem;padding:.3rem .6rem}
 
 </style>
+
 <link rel="icon" href="crown.svg" type="image/svg+xml">
 <meta name="theme-color" content="#0D1520">
 </head>
@@ -80,15 +81,16 @@ let current = null;
 document.getElementById('f').addEventListener('submit', e => {
   e.preventDefault();
   const d = new FormData(e.target);
-  S.add({name: d.get('name').trim(), bought: d.get('bought') || null, warranty: d.get('warranty') || null});
+  if (!(d.get('name') || '').trim()){ JK.toast('اكتب اسم واضح للعنصر الأول'); return; }
+  try { S.add({name: d.get('name').trim(), bought: d.get('bought') || null, warranty: d.get('warranty') || null}); } catch(err){ return; }
   e.target.reset(); JK.toast('اتضاف الجهاز ✔'); render();
 });
 
 document.getElementById('fe').addEventListener('submit', e => {
   e.preventDefault();
   const d = new FormData(e.target);
-  E.add({dev: current, type: d.get('type'), date: d.get('date'), note: d.get('note').trim(),
-         cost: d.get('cost') ? +d.get('cost') : null});
+  try { E.add({dev: current, type: d.get('type'), date: d.get('date'), note: d.get('note').trim(),
+         cost: d.get('cost') ? +d.get('cost') : null}); } catch(err){ return; }
   e.target.reset(); e.target.date.value = JK.today(); JK.toast('اتسجل الحدث ✔'); renderDev();
 });
 
@@ -124,9 +126,10 @@ function renderDev(){
     (p.warranty ? 'نهاية الضمان: ' + JK.fmtDate(p.warranty) + ' · ' + warrantyState(p) : '') + '</div>';
   const evs = E.all().filter(x => x.dev === current).sort((a,b) => b.date.localeCompare(a.date));
   document.getElementById('tl').innerHTML = evs.length ? evs.map(x =>
-    '<div class="tl-item"><span class="ev-type">' + JK.esc(x.type) + '</span> ' + JK.esc(x.note) +
+    '<div class="tl-item jk-row between"><span><span class="ev-type">' + JK.esc(x.type) + '</span> ' + JK.esc(x.note) +
     (x.cost != null ? ' · ' + JK.fmtMoney(x.cost, 'جنيه') : '') +
-    '<div class="d">' + JK.fmtDate(x.date) + '</div></div>').join('')
+    '<div class="d">' + JK.fmtDate(x.date) + '</div></span>' +
+    '<button class="icon-btn danger" data-evdel="' + x.id + '" title="امسح الحدث ده">🗑</button></div>').join('')
     : '<div class="muted">مفيش أحداث لسه.</div>';
   JK.wrapLatin(document.getElementById('viewDev'));
 }
@@ -139,6 +142,10 @@ document.getElementById('list').addEventListener('click', e => {
   if (row) showDev(row.dataset.open);
 });
 document.getElementById('back').addEventListener('click', showList);
+document.getElementById('tl').addEventListener('click', async e => {
+  const b = e.target.closest('[data-evdel]'); if (!b) return;
+  if (await JK.confirmDialog('تمسح الحدث ده من سجل الجهاز؟')){ E.remove(b.dataset.evdel); renderDev(); }
+});
 document.getElementById('devInfo').addEventListener('click', async e => {
   const id = e.target.dataset && e.target.dataset.del;
   if (id && await JK.confirmDialog('تحذف الجهاز وكل سجله؟')){
