@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>مقتنياتي | تطبيقات جوكر</title>
+<link rel="stylesheet" href="joker-base.css">
+<style>
+:root{
+  --bg:#12122B; --surface:#1B1B3D; --surface2:#262650;
+  --accent:#818CF8; --accent2:#F59E0B;
+  --font-head:'Almarai',sans-serif; --font-body:'Almarai',sans-serif;
+}
+body{background:radial-gradient(700px 320px at 85% 0%, rgba(129,140,248,.16), transparent 60%), var(--bg)}
+.thumb{width:64px;height:64px;border-radius:14px;object-fit:cover;flex:none;background:var(--surface2)}
+.item-main{flex:1;min-width:0}
+.item-main b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.photo-btn{display:inline-flex;align-items:center;gap:.4rem;background:var(--surface2);border-radius:12px;padding:.6rem .9rem;color:var(--muted);font-size:.9rem;cursor:pointer}
+#photoPrev{width:100%;max-height:180px;object-fit:cover;border-radius:14px;margin-top:.6rem;display:none}
+
+</style>
+<link rel="icon" href="crown.svg" type="image/svg+xml">
+<meta name="theme-color" content="#12122B">
+</head>
+<body>
+<div class="jk-wrap">
+  <header class="jk-header" id="jk-header"></header>
+
+  <section class="jk-card">
+    <h2 style="font-size:1.05rem">أضف غرض</h2>
+    <form id="f">
+      <label>اسم الغرض</label>
+      <input name="name" required placeholder="مثال: لابتوب HP">
+      <div class="jk-grid" style="grid-template-columns:1fr 1fr">
+        <div><label>السعر</label><input name="price" type="number" step="0.01" min="0" inputmode="decimal" placeholder="اختياري"></div>
+        <div><label>تاريخ الشراء</label><input name="bought" type="date"></div>
+      </div>
+      <label>الرقم التسلسلي (اختياري)</label>
+      <input name="serial" placeholder="Serial Number">
+      <label>ملاحظات (اختياري)</label>
+      <input name="notes" placeholder="أي تفاصيل تانية">
+      <label class="photo-btn">📷 إضافة صورة <input id="photo" type="file" accept="image/*" capture="environment" hidden></label>
+      <img id="photoPrev" alt="">
+      <button class="jk-btn block" type="submit">حفظ الغرض</button>
+    </form>
+  </section>
+
+  <section class="jk-card">
+    <div class="jk-row between">
+      <h2 style="font-size:1.05rem">مقتنياتك <span class="muted" id="count"></span></h2>
+      <div class="jk-row">
+        <input id="q" placeholder="ابحث بأي حاجة…" style="width:140px;padding:.45rem .7rem">
+        <button class="jk-btn ghost" id="export" style="padding:.45rem .8rem">تصدير</button>
+      </div>
+    </div>
+    <div id="list"></div>
+  </section>
+
+  <footer class="jk-footer" id="jk-footer"></footer>
+</div>
+<script src="joker-core.js"></script>
+<script>
+JK.chrome({title:'مقتنياتي', tagline:'كل ممتلكاتك في مكان واحد'});
+const S = JK.store('stuff:items');
+const form = document.getElementById('f');
+let photoData = null;
+
+document.getElementById('photo').addEventListener('change', e => {
+  const file = e.target.files[0]; if (!file) return;
+  const img = new Image();
+  img.onload = () => {
+    const scale = Math.min(1, 800 / Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = img.width * scale; c.height = img.height * scale;
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    photoData = c.toDataURL('image/jpeg', .72);
+    const p = document.getElementById('photoPrev'); p.src = photoData; p.style.display = 'block';
+    URL.revokeObjectURL(img.src);
+  };
+  img.src = URL.createObjectURL(file);
+});
+
+form.addEventListener('submit', e => {
+  e.preventDefault();
+  const d = new FormData(form);
+  try {
+    S.add({name: d.get('name').trim(), price: d.get('price') ? +d.get('price') : null,
+           bought: d.get('bought') || null, serial: (d.get('serial') || '').trim(),
+           notes: (d.get('notes') || '').trim(), photo: photoData});
+  } catch(err){ JK.toast('الصورة كبيرة على التخزين، احفظ من غيرها'); return; }
+  form.reset(); photoData = null; document.getElementById('photoPrev').style.display = 'none';
+  JK.toast('اتحفظ الغرض ✔'); render();
+});
+
+let q = '';
+document.getElementById('q').addEventListener('input', e => { q = e.target.value.trim(); render(); });
+
+function render(){
+  const items = S.all().filter(p => !q || [p.name, p.serial, p.notes].join(' ').includes(q));
+  document.getElementById('count').textContent = items.length ? '(' + items.length + ')' : '';
+  const el = document.getElementById('list');
+  if (!items.length){ el.innerHTML = JK.emptyState(q ? 'مفيش نتايج' : 'مفيش مقتنيات لسه. أضف أول غرض من فوق.'); return; }
+  el.innerHTML = items.map(p =>
+    '<div class="jk-list-item">' +
+      (p.photo ? '<img class="thumb" src="' + p.photo + '" alt="">' : '') +
+      '<div class="item-main"><b>' + JK.esc(p.name) + '</b>' +
+      '<span class="muted">' +
+        (p.price != null ? JK.fmtMoney(p.price, 'جنيه') + ' · ' : '') +
+        (p.bought ? JK.fmtDate(p.bought) : '') +
+        (p.serial ? '<br>S/N: ' + JK.esc(p.serial) : '') +
+        (p.notes ? '<br>' + JK.esc(p.notes) : '') +
+      '</span></div>' +
+      '<button class="icon-btn danger" data-del="' + p.id + '">🗑</button>' +
+    '</div>').join('');
+  JK.wrapLatin(document.getElementById('list'));
+}
+
+document.getElementById('list').addEventListener('click', async e => {
+  const id = e.target.dataset && e.target.dataset.del;
+  if (id && await JK.confirmDialog('تحذف الغرض ده نهائيًا؟')){ S.remove(id); render(); JK.toast('اتحذف'); }
+});
+
+document.getElementById('export').addEventListener('click', () => {
+  const rows = [['الاسم','السعر','تاريخ الشراء','الرقم التسلسلي','ملاحظات']].concat(
+    S.all().map(p => [p.name, p.price ?? '', p.bought ?? '', p.serial ?? '', p.notes ?? '']));
+  JK.download('moqtanayati-' + JK.today() + '.csv', '﻿' + JK.toCSV(rows), 'text/csv');
+  JK.toast('اتصدّر (الصور مش بتدخل في CSV)');
+});
+
+render();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+
+</script>
+</body>
+</html>
