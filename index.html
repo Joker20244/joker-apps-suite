@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>تطبيقات جوكر 👑 | 10 تطبيقات عملية</title>
+<meta name="description" content="مجموعة تطبيقات جوكر: 10 تطبيقات ويب عملية تشتغل من المتصفح، بياناتك على جهازك.">
+<link rel="stylesheet" href="joker-base.css">
+<link rel="icon" href="crown.svg" type="image/svg+xml">
+<style>
+  body{background:
+    radial-gradient(1000px 500px at 85% -5%, rgba(245,158,11,.14), transparent 60%),
+    radial-gradient(800px 400px at 0% 20%, rgba(124,58,237,.10), transparent 55%),
+    var(--bg)}
+  .hero{text-align:center;padding:2.2rem 1rem 1rem}
+  .hero img{width:88px;filter:drop-shadow(0 6px 18px rgba(245,158,11,.5))}
+  .hero h1{font-size:2rem;margin-top:.4rem}
+  .hero p{color:var(--muted);max-width:420px;margin:.5rem auto 0}
+  .apps{display:grid;gap:.9rem;margin-top:1.4rem}
+  .app-card{display:flex;gap:.9rem;align-items:center;text-decoration:none;color:var(--text);
+    background:var(--surface);border-radius:20px;padding:1rem 1.1rem;border:1px solid rgba(255,255,255,.06);
+    transition:transform .15s;position:relative;overflow:hidden}
+  .app-card:active{transform:scale(.98)}
+  .app-card::before{content:'';position:absolute;inset-inline-start:0;top:0;bottom:0;width:6px;background:var(--c)}
+  .app-num{font-family:'Space Grotesk';font-weight:700;font-size:1.1rem;width:44px;height:44px;flex:none;
+    border-radius:14px;display:grid;place-items:center;color:#fff;background:var(--c)}
+  .app-card h2{font-size:1.12rem}
+  .app-card p{color:var(--muted);font-size:.85rem;line-height:1.5}
+  .go{margin-inline-start:auto;color:var(--muted);font-size:1.2rem}
+</style>
+</head>
+<body>
+<div class="jk-wrap">
+  <div class="hero">
+    <img src="crown.svg" alt="تاج جوكر">
+    <h1>تطبيقات <span style="color:var(--jk-crown)">جوكر</span></h1>
+    <p>10 تطبيقات عملية بتشتغل من المتصفح على طول. كل حاجة بتتسجل على جهازك أنت، من غير حسابات ولا سيرفرات.</p>
+  </div>
+
+  <div class="jk-card jk-bio">
+    <img src="crown.svg" alt="">
+    <div>
+      <b>عن جوكر</b>
+      <div class="muted" style="margin-top:.2rem">أنا أحمد «جوكر»، بحب التقنية وأعمل أدوات عملية تسهّل اليوم: تسجّل مشترياتك وأجهزتك واشتراكاتك، وتفتّش في مشاكل موبايلك. المجموعة دي كلها معمولة بنفس الروح: هوية التاج، وألوان وخط مختلف لكل تطبيق.</div>
+    </div>
+  </div>
+
+  <div class="apps" id="apps"></div>
+
+  <div class="jk-footer" style="text-align:center;margin-top:2rem;color:var(--muted);font-size:.8rem">
+    <img src="crown.svg" style="width:24px;vertical-align:middle" alt="">
+    مجموعة تطبيقات جوكر · نسخة المتصفح · البيانات محلية على جهازك
+  </div>
+</div>
+<script src="joker-core.js"></script>
+<script>
+const APPS = [
+  {n:1, slug:'scan',    name:'ماسح جوكر',           tag:'امسح باركود أي منتج واعرف تفاصيله واحفظه بتقييمك وملاحظاتك', c:'#0F766E'},
+  {n:2, slug:'prices',  name:'أسعاري',              tag:'سجّل أسعار مشترياتك وقارن السعر الحالي بالقديم',             c:'#15803D'},
+  {n:3, slug:'stuff',   name:'مقتنياتي',            tag:'كل ممتلكاتك وأجهزتك بالصور والأسعار والأرقام التسلسلية',     c:'#4338CA'},
+  {n:4, slug:'pantry',  name:'مخزون البيت',          tag:'اللي موجود في البيت وكمياته، واللي قرب يخلص يتحط في قائمة الشراء', c:'#4D7C0F'},
+  {n:5, slug:'subs',    name:'اشتراكاتي',            tag:'كل اشتراكاتك في مكان واحد: التكلفة الكلية وتنبيه التجديد',  c:'#7C3AED'},
+  {n:6, slug:'heat',    name:'حرارة موبايلك',        tag:'افهم ليه موبايلك بيسخن وإزاي تقلل الحرارة، وسجّل ملاحظاتك', c:'#DC2626'},
+  {n:7, slug:'fix',     name:'موسوعة حلول الموبايل', tag:'أكتر من 50 مشكلة شائعة في الموبايل وحلولها خطوة بخطوة',     c:'#1E3A8A'},
+  {n:8, slug:'devices', name:'سجل أجهزتي',           tag:'ملف لكل جهاز: شراء وصيانة وأعطال وضمان وقطع غيار',          c:'#0E7490'},
+  {n:9, slug:'archive', name:'أرشيفي',               tag:'صوّر أي غرض وخزّنه باسمه ووصفه وتصنيفه، وابحث بسهولة',      c:'#92400E'},
+  {n:10,slug:'expert',  name:'خبير موبايلك',         tag:'معلومات جهازك اللي المتصفح يقدر يشوفها + مساعد محادثة للمشاكل', c:'#065F46'}
+];
+document.getElementById('apps').innerHTML = APPS.map(a =>
+  '<a class="app-card" style="--c:' + a.c + '" href="' + a.slug + '.html">' +
+  '<span class="app-num">' + a.n + '</span>' +
+  '<span><h2>' + a.name + '</h2><p>' + a.tag + '</p></span>' +
+  '<span class="go">‹</span></a>').join('');
+JK.wrapLatin(document.body);
+</script>
+</body>
+</html>
