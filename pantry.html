@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>مخزون البيت | تطبيقات جوكر</title>
+<link rel="stylesheet" href="joker-base.css">
+<style>
+:root{
+  --bg:#151B0E; --surface:#1E2814; --surface2:#2A3820;
+  --accent:#A3E635; --accent2:#FB923C;
+  --font-head:'El Messiri',sans-serif; --font-body:'El Messiri',sans-serif;
+}
+body{background:radial-gradient(700px 320px at 85% 0%, rgba(163,230,53,.13), transparent 60%), var(--bg)}
+.qty{display:flex;align-items:center;gap:.5rem;flex:none}
+.qty button{width:32px;height:32px;border-radius:10px;background:var(--surface2);color:var(--text);font-size:1.15rem;line-height:1}
+.qty b{min-width:44px;text-align:center;font-family:'Space Grotesk'}
+.low-badge{background:#7C2D12;color:#FDBA74;border-radius:999px;padding:.1rem .6rem;font-size:.75rem}
+.unit{color:var(--muted);font-size:.8rem}
+.shop-item{display:flex;align-items:center;gap:.6rem;padding:.5rem 0;border-bottom:1px dashed rgba(255,255,255,.08)}
+.shop-item input{width:auto;accent-color:var(--accent)}
+
+</style>
+<link rel="icon" href="crown.svg" type="image/svg+xml">
+<meta name="theme-color" content="#151B0E">
+</head>
+<body>
+<div class="jk-wrap">
+  <header class="jk-header" id="jk-header"></header>
+
+  <section class="jk-card">
+    <h2 style="font-size:1.05rem">أضف صنف للبيت</h2>
+    <form id="f">
+      <label>اسم الصنف</label>
+      <input name="name" required placeholder="مثال: سكر، مناديل، مسحوق غسيل">
+      <div class="jk-grid" style="grid-template-columns:1fr 1fr 1fr">
+        <div><label>الكمية</label><input name="qty" type="number" min="0" step="1" value="1" required></div>
+        <div><label>الوحدة</label><input name="unit" placeholder="كيس / علبة" maxlength="12"></div>
+        <div><label>حد النفاد</label><input name="low" type="number" min="0" step="1" value="1" title="لما الكمية توصل للرقم ده يتحط في قائمة الشراء"></div>
+      </div>
+      <button class="jk-btn block" type="submit">إضافة للمخزون</button>
+    </form>
+  </section>
+
+  <section class="jk-card" id="shopCard" style="display:none">
+    <div class="jk-row between">
+      <h2 style="font-size:1.05rem">🛒 قائمة الشراء</h2>
+      <button class="jk-btn ghost" id="share" style="padding:.4rem .8rem">نسخ القائمة</button>
+    </div>
+    <div id="shop"></div>
+  </section>
+
+  <section class="jk-card">
+    <div class="jk-row between">
+      <h2 style="font-size:1.05rem">المخزون <span class="muted" id="count"></span></h2>
+      <input id="q" placeholder="ابحث…" style="width:130px;padding:.45rem .7rem">
+    </div>
+    <div id="list"></div>
+  </section>
+
+  <footer class="jk-footer" id="jk-footer"></footer>
+</div>
+<script src="joker-core.js"></script>
+<script>
+JK.chrome({title:'مخزون البيت', tagline:'اعرف الموجود واللي قرب يخلص'});
+const S = JK.store('pantry:items');
+const form = document.getElementById('f');
+
+form.addEventListener('submit', e => {
+  e.preventDefault();
+  const d = new FormData(form);
+  const name = d.get('name').trim();
+  const existing = S.all().find(p => p.name === name);
+  if (existing){ S.update(existing.id, {qty: existing.qty + (+d.get('qty') || 0)}); JK.toast('زوّدنا كمية «' + name + '»'); }
+  else S.add({name, qty: +d.get('qty') || 0, unit: (d.get('unit') || '').trim(), low: +d.get('low') || 0});
+  form.reset(); form.qty.value = 1; form.low.value = 1; render();
+});
+
+let q = '';
+document.getElementById('q').addEventListener('input', e => { q = e.target.value.trim(); render(); });
+
+function lowItems(){ return S.all().filter(p => p.qty <= p.low); }
+
+function render(){
+  const items = S.all().filter(p => !q || p.name.includes(q)).sort((a,b) => (a.qty <= a.low ? 0 : 1) - (b.qty <= b.low ? 0 : 1));
+  document.getElementById('count').textContent = items.length ? '(' + items.length + ')' : '';
+  const el = document.getElementById('list');
+  el.innerHTML = items.length ? items.map(p =>
+    '<div class="jk-list-item">' +
+      '<div style="flex:1;min-width:0"><b>' + JK.esc(p.name) + '</b> ' +
+        (p.qty <= p.low ? '<span class="low-badge">قرب يخلص</span>' : '') + '<br>' +
+        '<span class="unit">حد النفاد: ' + p.low + (p.unit ? ' ' + JK.esc(p.unit) : '') + '</span></div>' +
+      '<div class="qty"><button data-minus="' + p.id + '">−</button><b>' + p.qty + '</b><button data-plus="' + p.id + '">+</button></div>' +
+      '<button class="icon-btn danger" data-del="' + p.id + '">🗑</button>' +
+    '</div>').join('')
+    : JK.emptyState(q ? 'مفيش نتايج' : 'المخزون فاضي. أضف أصناف البيت من فوق.');
+
+  const lows = lowItems();
+  const sc = document.getElementById('shopCard');
+  if (lows.length){
+    sc.style.display = '';
+    document.getElementById('shop').innerHTML = lows.map(p =>
+      '<div class="shop-item"><span style="flex:1">' + JK.esc(p.name) + '</span>' +
+      '<span class="muted">الباقي: ' + p.qty + (p.unit ? ' ' + JK.esc(p.unit) : '') + '</span>' +
+      '<button class="icon-btn ok" data-bought="' + p.id + '" title="اشتريته">✔</button></div>').join('');
+  } else sc.style.display = 'none';
+  JK.wrapLatin(el);
+}
+
+document.getElementById('list').addEventListener('click', async e => {
+  const d = e.target.dataset || {}; const it = id => S.get(id);
+  if (d.plus){ const p = it(d.plus); S.update(p.id, {qty: p.qty + 1}); render(); }
+  else if (d.minus){ const p = it(d.minus); S.update(p.id, {qty: Math.max(0, p.qty - 1)}); render(); }
+  else if (d.del && await JK.confirmDialog('تحذف الصنف ده؟')){ S.remove(d.del); render(); }
+});
+
+document.getElementById('shop').addEventListener('click', e => {
+  const id = e.target.dataset && e.target.dataset.bought;
+  if (id){ const p = S.get(id); S.update(id, {qty: p.low + 2}); JK.toast('تمام، اتحسبت إنك اشتريت «' + p.name + '»'); render(); }
+});
+
+document.getElementById('share').addEventListener('click', () => {
+  const txt = '🛒 قائمة شراء البيت:\n' + lowItems().map(p => '- ' + p.name + ' (الباقي: ' + p.qty + (p.unit ? ' ' + p.unit : '') + ')').join('\n');
+  (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject())
+    .then(() => JK.toast('القائمة اتنسخت'))
+    .catch(() => JK.download('shopping-list.txt', txt));
+});
+
+render();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+
+</script>
+</body>
+</html>
