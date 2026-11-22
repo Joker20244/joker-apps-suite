@@ -1,11 +1,11 @@
-const C = 'jk-suite-v3';
+const C = 'jk-suite-v4';
 const CORE = ['./','./index.html','./joker-base.css','./joker-core.js','./crown.svg'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(C).then(c => c.addAll(CORE)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('jk-suite-') && k !== C).map(k => caches.delete(k)))).then(() => clients.claim()));
 });
 function networkFirst(req){
-  return fetch(req).then(resp => {
+  return fetch(req, {cache: 'no-store'}).then(resp => {
     if (resp.ok){ const copy = resp.clone(); caches.open(C).then(c => c.put(req, copy)); }
     return resp;
   }).catch(() => caches.match(req));
@@ -13,7 +13,7 @@ function networkFirst(req){
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   if (e.request.mode === 'navigate'){
-    e.respondWith(fetch(e.request).then(resp => {
+    e.respondWith(fetch(e.request, {cache: 'no-store'}).then(resp => {
       if (resp.ok){ const copy = resp.clone(); caches.open(C).then(c => c.put(e.request, copy)); }
       return resp;
     }).catch(() => caches.match(e.request).then(r => r ||
