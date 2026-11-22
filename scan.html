@@ -23,6 +23,7 @@ body{background:radial-gradient(700px 320px at 85% 0%, rgba(45,212,191,.14), tra
 .privacy{font-size:.78rem;color:var(--muted);background:var(--surface2);border-radius:12px;padding:.55rem .8rem}
 
 </style>
+
 <link rel="icon" href="crown.svg" type="image/svg+xml">
 <meta name="theme-color" content="#0A1B1A">
 </head>
@@ -143,8 +144,8 @@ function wireSave(box){
   box.querySelector('#sv_btn').addEventListener('click', () => {
     const name = box.querySelector('#sv_name').value.trim();
     if (!name){ JK.toast('اكتب اسم المنتج'); return; }
-    S.add({code: box.querySelector('#sv_btn').dataset.code, name, rating,
-           notes: box.querySelector('#sv_notes').value.trim(), img: box.querySelector('#sv_img').value});
+    try { S.add({code: box.querySelector('#sv_btn').dataset.code, name, rating,
+           notes: box.querySelector('#sv_notes').value.trim(), img: box.querySelector('#sv_img').value}); } catch(err){ return; }
     JK.toast('اتحفظ المنتج ✔'); box.style.display = 'none'; render();
   });
 }
